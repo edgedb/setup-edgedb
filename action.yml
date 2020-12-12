@@ -1,0 +1,22 @@
+name: 'setup-edgedb'
+description: 'Set up EdgeDB CLI and Server and make them available in PATH'
+author: 'EdgeDB Inc.'
+inputs:
+  cli-version:
+    required: false
+    description: >
+      Version range or exact version of EdgeDB CLI to set up,
+      using SemVer's version range syntax, or one of the predefined
+      rolling version specifiers: "nightly" for the latest nightly
+      build, "stable" for the latest stable release.  Defaults to
+      "stable".
+    default: 'stable'
+  server-version:
+    required: false
+    description: >
+      Version of EdgeDB server to install, or "stable" for the latest
+      stable release, or "nightly" for the latest nightly build.
+      Defaults to "stable".
+runs:
+  using: 'node12'
+  main: 'dist/index.js'
