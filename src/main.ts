@@ -30,6 +30,9 @@ async function installServer(cliPath: string): Promise<string> {
     listeners: {
       stdout: (data: Buffer) => {
         core.debug(data.toString().trim())
+      },
+      stderr: (data: Buffer) => {
+        core.debug(data.toString().trim())
       }
     }
   }
@@ -53,6 +56,9 @@ async function installServer(cliPath: string): Promise<string> {
     listeners: {
       stdout: (data: Buffer) => {
         serverBinPath = data.toString().trim()
+      },
+      stderr: (data: Buffer) => {
+        core.debug(data.toString().trim())
       }
     }
   }

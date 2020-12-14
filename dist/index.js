@@ -69,6 +69,9 @@ function installServer(cliPath) {
             listeners: {
                 stdout: (data) => {
                     core.debug(data.toString().trim());
+                },
+                stderr: (data) => {
+                    core.debug(data.toString().trim());
                 }
             }
         };
@@ -88,6 +91,9 @@ function installServer(cliPath) {
             listeners: {
                 stdout: (data) => {
                     serverBinPath = data.toString().trim();
+                },
+                stderr: (data) => {
+                    core.debug(data.toString().trim());
                 }
             }
         };
