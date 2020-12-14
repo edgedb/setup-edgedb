@@ -84,8 +84,9 @@ describe('setup-edgedb', () => {
 
     inputs['cli-version'] = '>=1.0.0-alpha.5 <=1.0.0-alpha.7'
 
-    const pkgBase = 'https://packages.edgedb.com/archive/linux-x86_64'
-    const expectedUrl = pkgBase + '/edgedb-cli_1.0.0-alpha.7_2020121305'
+    const baseDist = main.getBaseDist()
+    const pkgBase = `https://packages.edgedb.com/archive/${baseDist}`
+    const expectedUrl = pkgBase + '/edgedb-cli_1.0.0-alpha.7_2020121404'
 
     const tmpdir = fs.mkdtempSync('edgedb-setup')
     let tmp = path.join(tmpdir, 'foo')

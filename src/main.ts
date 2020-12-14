@@ -68,25 +68,12 @@ async function installServer(cliPath: string): Promise<string> {
 }
 
 async function installCLI(): Promise<string> {
-  const arch = os.arch()
-  let distArch = ''
-  const platform = os.platform()
-
-  if (platform !== 'linux') {
-    throw Error(`This action cannot be ran on ${platform}`)
-  }
-
-  if (arch === 'x64') {
-    distArch = 'x86_64'
-  } else {
-    throw Error(`This action does not support the ${arch} architecture`)
-  }
-
   const requestedCliVersion = core.getInput('cli-version')
+  const arch = os.arch()
   const includeCliPrereleases = true
   let cliVersionRange = '*'
+  let dist = getBaseDist()
 
-  let dist = `${platform}-${distArch}`
   if (requestedCliVersion === 'nightly') {
     dist += '.nightly'
   } else if (requestedCliVersion !== 'stable') {
@@ -98,7 +85,7 @@ async function installCLI(): Promise<string> {
   const versionMap = new Map()
 
   for (const pkg of index.packages) {
-    if (pkg.architecture !== distArch) {
+    if (pkg.name !== 'edgedb-cli') {
       continue
     }
 
@@ -142,4 +129,27 @@ async function installCLI(): Promise<string> {
   }
 
   return cliDirectory
+}
+
+export function getBaseDist(): string {
+  const arch = os.arch()
+  let distArch = ''
+  const platform = os.platform()
+  let distPlatform = ''
+
+  if (platform === 'linux') {
+    distPlatform = platform
+  } else if (platform === 'darwin') {
+    distPlatform = 'macos'
+  } else {
+    throw Error(`This action cannot be ran on ${platform}`)
+  }
+
+  if (arch === 'x64') {
+    distArch = 'x86_64'
+  } else {
+    throw Error(`This action does not support the ${arch} architecture`)
+  }
+
+  return `${distPlatform}-${distArch}`
 }

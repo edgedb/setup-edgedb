@@ -36,7 +36,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.run = void 0;
+exports.getBaseDist = exports.run = void 0;
 const fs = __importStar(__webpack_require__(5747));
 const os = __importStar(__webpack_require__(2087));
 const path = __importStar(__webpack_require__(5622));
@@ -98,22 +98,11 @@ function installServer(cliPath) {
 }
 function installCLI() {
     return __awaiter(this, void 0, void 0, function* () {
-        const arch = os.arch();
-        let distArch = '';
-        const platform = os.platform();
-        if (platform !== 'linux') {
-            throw Error(`This action cannot be ran on ${platform}`);
-        }
-        if (arch === 'x64') {
-            distArch = 'x86_64';
-        }
-        else {
-            throw Error(`This action does not support the ${arch} architecture`);
-        }
         const requestedCliVersion = core.getInput('cli-version');
+        const arch = os.arch();
         const includeCliPrereleases = true;
         let cliVersionRange = '*';
-        let dist = `${platform}-${distArch}`;
+        let dist = getBaseDist();
         if (requestedCliVersion === 'nightly') {
             dist += '.nightly';
         }
@@ -124,7 +113,7 @@ function installCLI() {
         const index = yield indexRequest.json();
         const versionMap = new Map();
         for (const pkg of index.packages) {
-            if (pkg.architecture !== distArch) {
+            if (pkg.name !== 'edgedb-cli') {
                 continue;
             }
             if (!versionMap.has(pkg.version) ||
@@ -149,6 +138,29 @@ function installCLI() {
         return cliDirectory;
     });
 }
+function getBaseDist() {
+    const arch = os.arch();
+    let distArch = '';
+    const platform = os.platform();
+    let distPlatform = '';
+    if (platform === 'linux') {
+        distPlatform = platform;
+    }
+    else if (platform === 'darwin') {
+        distPlatform = 'macos';
+    }
+    else {
+        throw Error(`This action cannot be ran on ${platform}`);
+    }
+    if (arch === 'x64') {
+        distArch = 'x86_64';
+    }
+    else {
+        throw Error(`This action does not support the ${arch} architecture`);
+    }
+    return `${distPlatform}-${distArch}`;
+}
+exports.getBaseDist = getBaseDist;
 
 
 /***/ }),
