@@ -135,7 +135,7 @@ function installCLI() {
         let cliDirectory = tc.find('edgedb-cli', matchingVer, arch);
         if (!cliDirectory) {
             const cliPkg = versionMap.get(matchingVer);
-            const downloadUrl = `${EDGEDB_PKG_ROOT}/${cliPkg.installref}`;
+            const downloadUrl = (new URL(cliPkg.installref, EDGEDB_PKG_ROOT)).href;
             core.info(`Downloading edgedb-cli ${matchingVer} - ${arch} from ${downloadUrl}`);
             const downloadPath = yield tc.downloadTool(downloadUrl);
             fs.chmodSync(downloadPath, 0o755);
