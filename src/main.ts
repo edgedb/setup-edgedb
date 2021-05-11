@@ -9,7 +9,7 @@ import * as exec from '@actions/exec'
 import {ExecOptions} from '@actions/exec/lib/interfaces'
 import * as tc from '@actions/tool-cache'
 
-const EDGEDB_PKG_ROOT = 'https://packages.edgedb.com'
+export const EDGEDB_PKG_ROOT = 'https://packages.edgedb.com'
 const EDGEDB_PKG_IDX = `${EDGEDB_PKG_ROOT}/archive/.jsonindexes`
 
 export async function run(): Promise<void> {
@@ -78,7 +78,7 @@ async function installCLI(): Promise<string> {
   const arch = os.arch()
   const includeCliPrereleases = true
   let cliVersionRange = '*'
-  let dist = getBaseDist()
+  let dist = getBaseDist(arch, os.platform())
 
   if (requestedCliVersion === 'nightly') {
     dist += '.nightly'
@@ -86,35 +86,12 @@ async function installCLI(): Promise<string> {
     cliVersionRange = requestedCliVersion
   }
 
-  const indexRequest = await fetch.default(`${EDGEDB_PKG_IDX}/${dist}.json`)
-  const index = await indexRequest.json()
-  const versionMap = new Map()
-
-  for (const pkg of index.packages) {
-    if (pkg.name !== 'edgedb-cli') {
-      continue
-    }
-
-    if (
-      !versionMap.has(pkg.version) ||
-      versionMap.get(pkg.version).revision < pkg.revision
-    ) {
-      versionMap.set(pkg.version, pkg)
-    }
-  }
-
-  const matchingVer = semver.maxSatisfying(
-    Array.from(versionMap.keys()),
+  const versionMap = await getVersionMap(dist)
+  const matchingVer = await getMatchingVer(
+    versionMap,
     cliVersionRange,
-    {includePrerelease: includeCliPrereleases}
+    includeCliPrereleases
   )
-
-  if (!matchingVer) {
-    throw Error(
-      'no published EdgeDB CLI version matches requested version ' +
-        `'${cliVersionRange}'`
-    )
-  }
 
   let cliDirectory = tc.find('edgedb-cli', matchingVer, arch)
   if (!cliDirectory) {
@@ -137,10 +114,52 @@ async function installCLI(): Promise<string> {
   return cliDirectory
 }
 
-export function getBaseDist(): string {
-  const arch = os.arch()
+export async function getMatchingVer(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  versionMap: Map<string, any>,
+  cliVersionRange: string,
+  includeCliPrereleases: boolean
+): Promise<string> {
+  const matchingVer = semver.maxSatisfying(
+    Array.from(versionMap.keys()),
+    cliVersionRange,
+    {includePrerelease: includeCliPrereleases}
+  )
+
+  if (!matchingVer) {
+    throw Error(
+      'no published EdgeDB CLI version matches requested version ' +
+        `'${cliVersionRange}'`
+    )
+  }
+
+  return matchingVer
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getVersionMap(dist: string): Promise<Map<string, any>> {
+  const indexRequest = await fetch.default(`${EDGEDB_PKG_IDX}/${dist}.json`)
+  const index = await indexRequest.json()
+  const versionMap = new Map()
+
+  for (const pkg of index.packages) {
+    if (pkg.name !== 'edgedb-cli') {
+      continue
+    }
+
+    if (
+      !versionMap.has(pkg.version) ||
+      versionMap.get(pkg.version).revision < pkg.revision
+    ) {
+      versionMap.set(pkg.version, pkg)
+    }
+  }
+
+  return versionMap
+}
+
+export function getBaseDist(arch: string, platform: string): string {
   let distArch = ''
-  const platform = os.platform()
   let distPlatform = ''
 
   if (platform === 'linux') {
@@ -148,7 +167,7 @@ export function getBaseDist(): string {
   } else if (platform === 'darwin') {
     distPlatform = 'macos'
   } else {
-    throw Error(`This action cannot be ran on ${platform}`)
+    throw Error(`This action cannot be run on ${platform}`)
   }
 
   if (arch === 'x64') {

@@ -36,7 +36,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getBaseDist = exports.run = void 0;
+exports.getBaseDist = exports.getVersionMap = exports.getMatchingVer = exports.run = exports.EDGEDB_PKG_ROOT = void 0;
 const fs = __importStar(__webpack_require__(5747));
 const os = __importStar(__webpack_require__(2087));
 const path = __importStar(__webpack_require__(5622));
@@ -45,8 +45,8 @@ const semver = __importStar(__webpack_require__(1383));
 const core = __importStar(__webpack_require__(2186));
 const exec = __importStar(__webpack_require__(1514));
 const tc = __importStar(__webpack_require__(7784));
-const EDGEDB_PKG_ROOT = 'https://packages.edgedb.com';
-const EDGEDB_PKG_IDX = `${EDGEDB_PKG_ROOT}/archive/.jsonindexes`;
+exports.EDGEDB_PKG_ROOT = 'https://packages.edgedb.com';
+const EDGEDB_PKG_IDX = `${exports.EDGEDB_PKG_ROOT}/archive/.jsonindexes`;
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -108,13 +108,43 @@ function installCLI() {
         const arch = os.arch();
         const includeCliPrereleases = true;
         let cliVersionRange = '*';
-        let dist = getBaseDist();
+        let dist = getBaseDist(arch, os.platform());
         if (requestedCliVersion === 'nightly') {
             dist += '.nightly';
         }
         else if (requestedCliVersion !== 'stable') {
             cliVersionRange = requestedCliVersion;
         }
+        const versionMap = yield getVersionMap(dist);
+        const matchingVer = yield getMatchingVer(versionMap, cliVersionRange, includeCliPrereleases);
+        let cliDirectory = tc.find('edgedb-cli', matchingVer, arch);
+        if (!cliDirectory) {
+            const cliPkg = versionMap.get(matchingVer);
+            const downloadUrl = new URL(cliPkg.installref, exports.EDGEDB_PKG_ROOT).href;
+            core.info(`Downloading edgedb-cli ${matchingVer} - ${arch} from ${downloadUrl}`);
+            const downloadPath = yield tc.downloadTool(downloadUrl);
+            fs.chmodSync(downloadPath, 0o755);
+            cliDirectory = yield tc.cacheFile(downloadPath, 'edgedb', 'edgedb-cli', matchingVer, arch);
+        }
+        return cliDirectory;
+    });
+}
+function getMatchingVer(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+versionMap, cliVersionRange, includeCliPrereleases) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const matchingVer = semver.maxSatisfying(Array.from(versionMap.keys()), cliVersionRange, { includePrerelease: includeCliPrereleases });
+        if (!matchingVer) {
+            throw Error('no published EdgeDB CLI version matches requested version ' +
+                `'${cliVersionRange}'`);
+        }
+        return matchingVer;
+    });
+}
+exports.getMatchingVer = getMatchingVer;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getVersionMap(dist) {
+    return __awaiter(this, void 0, void 0, function* () {
         const indexRequest = yield fetch.default(`${EDGEDB_PKG_IDX}/${dist}.json`);
         const index = yield indexRequest.json();
         const versionMap = new Map();
@@ -127,27 +157,12 @@ function installCLI() {
                 versionMap.set(pkg.version, pkg);
             }
         }
-        const matchingVer = semver.maxSatisfying(Array.from(versionMap.keys()), cliVersionRange, { includePrerelease: includeCliPrereleases });
-        if (!matchingVer) {
-            throw Error('no published EdgeDB CLI version matches requested version ' +
-                `'${cliVersionRange}'`);
-        }
-        let cliDirectory = tc.find('edgedb-cli', matchingVer, arch);
-        if (!cliDirectory) {
-            const cliPkg = versionMap.get(matchingVer);
-            const downloadUrl = (new URL(cliPkg.installref, EDGEDB_PKG_ROOT)).href;
-            core.info(`Downloading edgedb-cli ${matchingVer} - ${arch} from ${downloadUrl}`);
-            const downloadPath = yield tc.downloadTool(downloadUrl);
-            fs.chmodSync(downloadPath, 0o755);
-            cliDirectory = yield tc.cacheFile(downloadPath, 'edgedb', 'edgedb-cli', matchingVer, arch);
-        }
-        return cliDirectory;
+        return versionMap;
     });
 }
-function getBaseDist() {
-    const arch = os.arch();
+exports.getVersionMap = getVersionMap;
+function getBaseDist(arch, platform) {
     let distArch = '';
-    const platform = os.platform();
     let distPlatform = '';
     if (platform === 'linux') {
         distPlatform = platform;
@@ -156,7 +171,7 @@ function getBaseDist() {
         distPlatform = 'macos';
     }
     else {
-        throw Error(`This action cannot be ran on ${platform}`);
+        throw Error(`This action cannot be run on ${platform}`);
     }
     if (arch === 'x64') {
         distArch = 'x86_64';
@@ -172,13 +187,160 @@ exports.getBaseDist = getBaseDist;
 /***/ }),
 
 /***/ 7311:
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
 
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const main_1 = __webpack_require__(3109);
-main_1.run();
+const os = __importStar(__webpack_require__(2087));
+const main = __importStar(__webpack_require__(3109));
+const win = __importStar(__webpack_require__(4716));
+if (os.platform() === 'win32') {
+    win.run();
+}
+else {
+    main.run();
+}
+
+
+/***/ }),
+
+/***/ 4716:
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.run = void 0;
+const os = __importStar(__webpack_require__(2087));
+const fs = __importStar(__webpack_require__(5747));
+const core = __importStar(__webpack_require__(2186));
+const exec = __importStar(__webpack_require__(1514));
+const main = __importStar(__webpack_require__(3109));
+const fetch = __importStar(__webpack_require__(467));
+function run() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            yield installCLI();
+            yield installServer();
+        }
+        catch (error) {
+            core.setFailed(error.message);
+        }
+    });
+}
+exports.run = run;
+function checkOutput(cmd, args) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let out = '';
+        const options = {
+            listeners: {
+                stdout: (data) => {
+                    out += data.toString();
+                }
+            }
+        };
+        yield exec.exec(cmd, args, options);
+        return out.trim();
+    });
+}
+function getBaseDist() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const arch = os.arch();
+        const platform = (yield checkOutput('wsl uname')).toLocaleLowerCase();
+        return main.getBaseDist(arch, platform);
+    });
+}
+function installCLI() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const requestedCLIVersion = core.getInput('cli-version');
+        const arch = os.arch();
+        const includeCliPrereleases = true;
+        let cliVersionRange = '*';
+        let dist = yield getBaseDist();
+        if (requestedCLIVersion === 'nightly') {
+            dist += '.nightly';
+        }
+        else if (requestedCLIVersion !== 'stable') {
+            cliVersionRange = requestedCLIVersion;
+        }
+        const versionMap = yield main.getVersionMap(dist);
+        const matchingVer = yield main.getMatchingVer(versionMap, cliVersionRange, includeCliPrereleases);
+        const cliPkg = versionMap.get(matchingVer);
+        const downloadUrl = new URL(cliPkg.installref, main.EDGEDB_PKG_ROOT).href;
+        core.info(`Downloading edgedb-cli ${matchingVer} - ${arch} from ${downloadUrl}`);
+        const rsp = yield fetch.default(downloadUrl);
+        const file = fs.createWriteStream('C:\\Temp\\edgedb-cli');
+        rsp.body.pipe(file);
+        yield checkOutput('wsl cp /mnt/c/temp/edgedb-cli /usr/bin/edgedb');
+    });
+}
+function installServer() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const requestedVersion = core.getInput('server-version');
+        const args = ['edgedb', 'server', 'install', '--method', 'package'];
+        if (requestedVersion === 'nightly') {
+            args.push('--nightly');
+        }
+        else if (requestedVersion !== '' && requestedVersion !== 'stable') {
+            args.push('--version');
+            args.push(requestedVersion);
+        }
+        yield checkOutput('wsl', args);
+        const bin = yield checkOutput('wsl ls /usr/bin/edgedb-server-*');
+        if (bin === '') {
+            throw Error('could not find edgedb-server bin');
+        }
+        yield checkOutput('wsl', ['ln', '-s', bin.trim(), '/usr/bin/edgedb-server']);
+    });
+}
 
 
 /***/ }),

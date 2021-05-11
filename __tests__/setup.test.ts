@@ -84,7 +84,7 @@ describe('setup-edgedb', () => {
 
     inputs['cli-version'] = '>=1.0.0-alpha.5 <=1.0.0-alpha.7'
 
-    const baseDist = main.getBaseDist()
+    const baseDist = main.getBaseDist(os.arch(), os.platform())
     const pkgBase = `https://packages.edgedb.com/archive/${baseDist}`
     const expectedUrl = pkgBase + '/edgedb-cli_1.0.0-alpha.7_2020121617'
 
