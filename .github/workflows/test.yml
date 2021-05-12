@@ -37,6 +37,7 @@ jobs:
         with:
           additional-packages:
             ca-certificates
+            curl
       - uses: actions/checkout@v2
       - uses: ./
       - name: Verify installation
