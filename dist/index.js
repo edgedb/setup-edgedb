@@ -260,11 +260,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.run = void 0;
 const os = __importStar(__webpack_require__(2087));
-const fs = __importStar(__webpack_require__(5747));
 const core = __importStar(__webpack_require__(2186));
 const exec = __importStar(__webpack_require__(1514));
 const main = __importStar(__webpack_require__(3109));
-const fetch = __importStar(__webpack_require__(467));
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -316,10 +314,8 @@ function installCLI() {
         const cliPkg = versionMap.get(matchingVer);
         const downloadUrl = new URL(cliPkg.installref, main.EDGEDB_PKG_ROOT).href;
         core.info(`Downloading edgedb-cli ${matchingVer} - ${arch} from ${downloadUrl}`);
-        const rsp = yield fetch.default(downloadUrl);
-        const file = fs.createWriteStream('C:\\Temp\\edgedb-cli');
-        rsp.body.pipe(file);
-        yield checkOutput('wsl cp /mnt/c/temp/edgedb-cli /usr/bin/edgedb');
+        yield checkOutput('wsl', ['curl', '--fail', '--output', '/usr/bin/edgedb', downloadUrl]);
+        yield checkOutput('wsl chmod +x /usr/bin/edgedb');
     });
 }
 function installServer() {

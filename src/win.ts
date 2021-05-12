@@ -1,9 +1,7 @@
 import * as os from 'os'
-import * as fs from 'fs'
 import * as core from '@actions/core'
 import * as exec from '@actions/exec'
 import * as main from './main'
-import * as fetch from 'node-fetch'
 
 export async function run(): Promise<void> {
   try {
@@ -62,11 +60,14 @@ async function installCLI(): Promise<void> {
     `Downloading edgedb-cli ${matchingVer} - ${arch} from ${downloadUrl}`
   )
 
-  const rsp = await fetch.default(downloadUrl)
-  const file = fs.createWriteStream('C:\\Temp\\edgedb-cli')
-  rsp.body.pipe(file)
-
-  await checkOutput('wsl cp /mnt/c/temp/edgedb-cli /usr/bin/edgedb')
+  await checkOutput('wsl', [
+    'curl',
+    '--fail',
+    '--output',
+    '/usr/bin/edgedb',
+    downloadUrl
+  ])
+  await checkOutput('wsl chmod +x /usr/bin/edgedb')
 }
 
 async function installServer(): Promise<void> {
