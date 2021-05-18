@@ -16,9 +16,14 @@ async function checkOutput(cmd: string, args?: string[]): Promise<string> {
   let out = ''
 
   const options = {
+    silent: true,
     listeners: {
       stdout: (data: Buffer) => {
         out += data.toString()
+        core.debug(data.toString().trim())
+      },
+      stderr: (data: Buffer) => {
+        core.debug(data.toString().trim())
       }
     }
   }
@@ -62,6 +67,7 @@ async function installCLI(): Promise<void> {
 
   await checkOutput('wsl', [
     'curl',
+    '--show-error',
     '--fail',
     '--output',
     '/usr/bin/edgedb',
@@ -71,6 +77,8 @@ async function installCLI(): Promise<void> {
 }
 
 async function installServer(): Promise<void> {
+  await checkOutput('wsl edgedb server list-versions --json')
+
   const requestedVersion = core.getInput('server-version')
 
   const args = ['edgedb', 'server', 'install', '--method', 'package']
@@ -82,6 +90,7 @@ async function installServer(): Promise<void> {
     args.push(requestedVersion)
   }
 
+  core.debug('wsl ' + args.join(' '))
   await checkOutput('wsl', args)
   const bin = await checkOutput('wsl ls /usr/bin/edgedb-server-*')
 

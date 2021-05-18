@@ -279,9 +279,14 @@ function checkOutput(cmd, args) {
     return __awaiter(this, void 0, void 0, function* () {
         let out = '';
         const options = {
+            silent: true,
             listeners: {
                 stdout: (data) => {
                     out += data.toString();
+                    core.debug(data.toString().trim());
+                },
+                stderr: (data) => {
+                    core.debug(data.toString().trim());
                 }
             }
         };
@@ -314,12 +319,20 @@ function installCLI() {
         const cliPkg = versionMap.get(matchingVer);
         const downloadUrl = new URL(cliPkg.installref, main.EDGEDB_PKG_ROOT).href;
         core.info(`Downloading edgedb-cli ${matchingVer} - ${arch} from ${downloadUrl}`);
-        yield checkOutput('wsl', ['curl', '--fail', '--output', '/usr/bin/edgedb', downloadUrl]);
+        yield checkOutput('wsl', [
+            'curl',
+            '--fail',
+            '--output',
+            '/usr/bin/edgedb',
+            downloadUrl
+        ]);
         yield checkOutput('wsl chmod +x /usr/bin/edgedb');
     });
 }
 function installServer() {
     return __awaiter(this, void 0, void 0, function* () {
+        const versions = yield checkOutput('wsl edgedb server list-versions --json');
+        core.debug(versions);
         const requestedVersion = core.getInput('server-version');
         const args = ['edgedb', 'server', 'install', '--method', 'package'];
         if (requestedVersion === 'nightly') {
