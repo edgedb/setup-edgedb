@@ -120,20 +120,20 @@ export async function getMatchingVer(
   cliVersionRange: string,
   includeCliPrereleases: boolean
 ): Promise<string> {
-  const matchingVer = semver.maxSatisfying(
-    Array.from(versionMap.keys()),
-    cliVersionRange,
-    {includePrerelease: includeCliPrereleases}
+  const versions = Array.from(versionMap.keys()).filter(ver =>
+    semver.satisfies(ver, cliVersionRange, {
+      includePrerelease: includeCliPrereleases
+    })
   )
-
-  if (!matchingVer) {
+  versions.sort(semver.compareBuild)
+  if (versions.length > 0) {
+    return versions[versions.length - 1]
+  } else {
     throw Error(
       'no published EdgeDB CLI version matches requested version ' +
         `'${cliVersionRange}'`
     )
   }
-
-  return matchingVer
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
