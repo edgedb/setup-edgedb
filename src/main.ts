@@ -1,13 +1,12 @@
-import * as fs from 'fs'
-import * as os from 'os'
-import * as path from 'path'
-import * as fetch from 'node-fetch'
-import * as semver from 'semver'
-
 import * as core from '@actions/core'
 import * as exec from '@actions/exec'
 import {ExecOptions} from '@actions/exec/lib/interfaces'
 import * as tc from '@actions/tool-cache'
+import * as fs from 'fs'
+import * as fetch from 'node-fetch'
+import * as os from 'os'
+import * as path from 'path'
+import * as semver from 'semver'
 
 export const EDGEDB_PKG_ROOT = 'https://packages.edgedb.com'
 const EDGEDB_PKG_IDX = `${EDGEDB_PKG_ROOT}/archive/.jsonindexes`
@@ -42,12 +41,18 @@ async function installServer(cliPath: string): Promise<string> {
 
   if (requestedVersion === 'nightly') {
     cmdline.push('--nightly')
-  } else if (requestedVersion !== '' && requestedVersion !== 'stable') {
+  } else if (
+    requestedVersion !== undefined &&
+    requestedVersion !== '' &&
+    requestedVersion !== 'stable'
+  ) {
     cmdline.push('--version')
     cmdline.push(requestedVersion)
   }
 
-  await exec.exec(cli, ['server', 'install'].concat(cmdline), options)
+  const installCmdline = ['server', 'install'].concat(cmdline)
+  core.debug(`Running ${cli} ${installCmdline.join(' ')}`)
+  await exec.exec(cli, cmdline, options)
 
   let serverBinPath = ''
 
@@ -63,11 +68,9 @@ async function installServer(cliPath: string): Promise<string> {
     }
   }
 
-  await exec.exec(
-    cli,
-    ['server', 'info', '--bin-path'].concat(cmdline),
-    infoOptions
-  )
+  const infoCmdline = ['server', 'info', '--bin-path'].concat(cmdline)
+  core.debug(`Running ${cli} ${infoCmdline.join(' ')}`)
+  await exec.exec(cli, infoCmdline, infoOptions)
 
   serverBinPath = fs.realpathSync(serverBinPath)
   return path.dirname(serverBinPath)

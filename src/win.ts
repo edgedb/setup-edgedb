@@ -1,7 +1,7 @@
-import * as os from 'os'
+import * as main from './main'
 import * as core from '@actions/core'
 import * as exec from '@actions/exec'
-import * as main from './main'
+import * as os from 'os'
 
 export async function run(): Promise<void> {
   try {

@@ -1,7 +1,9 @@
-import * as io from '@actions/io'
+import * as main from '../src/main'
 import * as core from '@actions/core'
 import * as exec from '@actions/exec'
 import {ExecOptions} from '@actions/exec/lib/interfaces'
+import * as io from '@actions/io'
+import * as tc from '@actions/tool-cache'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
@@ -22,9 +24,6 @@ const tempDir = path.join(
 
 process.env['RUNNER_TOOL_CACHE'] = toolDir
 process.env['RUNNER_TEMP'] = tempDir
-
-import * as tc from '@actions/tool-cache'
-import * as main from '../src/main'
 
 describe('setup-edgedb', () => {
   let inputs = {} as any

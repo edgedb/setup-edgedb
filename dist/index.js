@@ -36,14 +36,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getBaseDist = exports.getVersionMap = exports.getMatchingVer = exports.run = exports.EDGEDB_PKG_ROOT = void 0;
-const fs = __importStar(__nccwpck_require__(5747));
-const os = __importStar(__nccwpck_require__(2087));
-const path = __importStar(__nccwpck_require__(5622));
-const fetch = __importStar(__nccwpck_require__(467));
-const semver = __importStar(__nccwpck_require__(1383));
 const core = __importStar(__nccwpck_require__(2186));
 const exec = __importStar(__nccwpck_require__(1514));
 const tc = __importStar(__nccwpck_require__(7784));
+const fs = __importStar(__nccwpck_require__(5747));
+const fetch = __importStar(__nccwpck_require__(467));
+const os = __importStar(__nccwpck_require__(2087));
+const path = __importStar(__nccwpck_require__(5622));
+const semver = __importStar(__nccwpck_require__(1383));
 exports.EDGEDB_PKG_ROOT = 'https://packages.edgedb.com';
 const EDGEDB_PKG_IDX = `${exports.EDGEDB_PKG_ROOT}/archive/.jsonindexes`;
 function run() {
@@ -79,11 +79,15 @@ function installServer(cliPath) {
         if (requestedVersion === 'nightly') {
             cmdline.push('--nightly');
         }
-        else if (requestedVersion !== '' && requestedVersion !== 'stable') {
+        else if (requestedVersion !== undefined &&
+            requestedVersion !== '' &&
+            requestedVersion !== 'stable') {
             cmdline.push('--version');
             cmdline.push(requestedVersion);
         }
-        yield exec.exec(cli, ['server', 'install'].concat(cmdline), options);
+        const installCmdline = ['server', 'install'].concat(cmdline);
+        core.debug(`Running ${cli} ${installCmdline.join(' ')}`);
+        yield exec.exec(cli, cmdline, options);
         let serverBinPath = '';
         const infoOptions = {
             silent: true,
@@ -96,7 +100,9 @@ function installServer(cliPath) {
                 }
             }
         };
-        yield exec.exec(cli, ['server', 'info', '--bin-path'].concat(cmdline), infoOptions);
+        const infoCmdline = ['server', 'info', '--bin-path'].concat(cmdline);
+        core.debug(`Running ${cli} ${infoCmdline.join(' ')}`);
+        yield exec.exec(cli, infoCmdline, infoOptions);
         serverBinPath = fs.realpathSync(serverBinPath);
         return path.dirname(serverBinPath);
     });
@@ -132,7 +138,9 @@ function getMatchingVer(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 versionMap, cliVersionRange, includeCliPrereleases) {
     return __awaiter(this, void 0, void 0, function* () {
-        const versions = Array.from(versionMap.keys()).filter(ver => semver.satisfies(ver, cliVersionRange, { includePrerelease: includeCliPrereleases }));
+        const versions = Array.from(versionMap.keys()).filter(ver => semver.satisfies(ver, cliVersionRange, {
+            includePrerelease: includeCliPrereleases
+        }));
         versions.sort(semver.compareBuild);
         if (versions.length > 0) {
             return versions[versions.length - 1];
@@ -213,9 +221,9 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const os = __importStar(__nccwpck_require__(2087));
 const main = __importStar(__nccwpck_require__(3109));
 const win = __importStar(__nccwpck_require__(4716));
+const os = __importStar(__nccwpck_require__(2087));
 if (os.platform() === 'win32') {
     win.run();
 }
@@ -261,10 +269,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.run = void 0;
-const os = __importStar(__nccwpck_require__(2087));
+const main = __importStar(__nccwpck_require__(3109));
 const core = __importStar(__nccwpck_require__(2186));
 const exec = __importStar(__nccwpck_require__(1514));
-const main = __importStar(__nccwpck_require__(3109));
+const os = __importStar(__nccwpck_require__(2087));
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -482,7 +490,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getState = exports.saveState = exports.group = exports.endGroup = exports.startGroup = exports.info = exports.warning = exports.error = exports.debug = exports.isDebug = exports.setFailed = exports.setCommandEcho = exports.setOutput = exports.getBooleanInput = exports.getMultilineInput = exports.getInput = exports.addPath = exports.setSecret = exports.exportVariable = exports.ExitCode = void 0;
+exports.getState = exports.saveState = exports.group = exports.endGroup = exports.startGroup = exports.info = exports.notice = exports.warning = exports.error = exports.debug = exports.isDebug = exports.setFailed = exports.setCommandEcho = exports.setOutput = exports.getBooleanInput = exports.getMultilineInput = exports.getInput = exports.addPath = exports.setSecret = exports.exportVariable = exports.ExitCode = void 0;
 const command_1 = __nccwpck_require__(7351);
 const file_command_1 = __nccwpck_require__(717);
 const utils_1 = __nccwpck_require__(5278);
@@ -660,19 +668,30 @@ exports.debug = debug;
 /**
  * Adds an error issue
  * @param message error issue message. Errors will be converted to string via toString()
+ * @param properties optional properties to add to the annotation.
  */
-function error(message) {
-    command_1.issue('error', message instanceof Error ? message.toString() : message);
+function error(message, properties = {}) {
+    command_1.issueCommand('error', utils_1.toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 exports.error = error;
 /**
- * Adds an warning issue
+ * Adds a warning issue
  * @param message warning issue message. Errors will be converted to string via toString()
+ * @param properties optional properties to add to the annotation.
  */
-function warning(message) {
-    command_1.issue('warning', message instanceof Error ? message.toString() : message);
+function warning(message, properties = {}) {
+    command_1.issueCommand('warning', utils_1.toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 exports.warning = warning;
+/**
+ * Adds a notice issue
+ * @param message notice issue message. Errors will be converted to string via toString()
+ * @param properties optional properties to add to the annotation.
+ */
+function notice(message, properties = {}) {
+    command_1.issueCommand('notice', utils_1.toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+}
+exports.notice = notice;
 /**
  * Writes info to log with console.log.
  * @param message info message
@@ -806,7 +825,7 @@ exports.issueCommand = issueCommand;
 // We use any as a valid input type
 /* eslint-disable @typescript-eslint/no-explicit-any */
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.toCommandValue = void 0;
+exports.toCommandProperties = exports.toCommandValue = void 0;
 /**
  * Sanitizes an input into a string so it can be passed into issueCommand safely
  * @param input input to sanitize into a string
@@ -821,6 +840,25 @@ function toCommandValue(input) {
     return JSON.stringify(input);
 }
 exports.toCommandValue = toCommandValue;
+/**
+ *
+ * @param annotationProperties
+ * @returns The command properties to send with the actual annotation command
+ * See IssueCommandProperties: https://github.com/actions/runner/blob/main/src/Runner.Worker/ActionCommandManager.cs#L646
+ */
+function toCommandProperties(annotationProperties) {
+    if (!Object.keys(annotationProperties).length) {
+        return {};
+    }
+    return {
+        title: annotationProperties.title,
+        line: annotationProperties.startLine,
+        endLine: annotationProperties.endLine,
+        col: annotationProperties.startColumn,
+        endColumn: annotationProperties.endColumn
+    };
+}
+exports.toCommandProperties = toCommandProperties;
 //# sourceMappingURL=utils.js.map
 
 /***/ }),
@@ -8498,7 +8536,7 @@ module.exports = patch
 
 /***/ }),
 
-/***/ 4016:
+/***/ 6014:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 const parse = __nccwpck_require__(5925)
@@ -8511,7 +8549,7 @@ module.exports = prerelease
 
 /***/ }),
 
-/***/ 6417:
+/***/ 7499:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 const compare = __nccwpck_require__(4309)
@@ -8592,9 +8630,9 @@ module.exports = {
   major: __nccwpck_require__(6688),
   minor: __nccwpck_require__(8447),
   patch: __nccwpck_require__(2866),
-  prerelease: __nccwpck_require__(4016),
+  prerelease: __nccwpck_require__(6014),
   compare: __nccwpck_require__(4309),
-  rcompare: __nccwpck_require__(6417),
+  rcompare: __nccwpck_require__(7499),
   compareLoose: __nccwpck_require__(2804),
   compareBuild: __nccwpck_require__(2156),
   sort: __nccwpck_require__(1426),
@@ -9484,7 +9522,7 @@ module.exports = __nccwpck_require__(4219);
 
 
 var net = __nccwpck_require__(1631);
-var tls = __nccwpck_require__(8818);
+var tls = __nccwpck_require__(4016);
 var http = __nccwpck_require__(8605);
 var https = __nccwpck_require__(7211);
 var events = __nccwpck_require__(8614);
@@ -9788,7 +9826,7 @@ module.exports = bytesToUuid;
 // Unique ID creation requires a high quality random # generator.  In node.js
 // this is pretty straight-forward - we use the crypto API.
 
-var crypto = __nccwpck_require__(3373);
+var crypto = __nccwpck_require__(6417);
 
 module.exports = function nodeRNG() {
   return crypto.randomBytes(16);
@@ -10307,7 +10345,7 @@ module.exports = require("child_process");
 
 /***/ }),
 
-/***/ 3373:
+/***/ 6417:
 /***/ ((module) => {
 
 "use strict";
@@ -10395,7 +10433,7 @@ module.exports = require("timers");
 
 /***/ }),
 
-/***/ 8818:
+/***/ 4016:
 /***/ ((module) => {
 
 "use strict";
