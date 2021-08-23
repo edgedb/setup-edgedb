@@ -87,7 +87,7 @@ function installServer(cliPath) {
         }
         const installCmdline = ['server', 'install'].concat(cmdline);
         core.debug(`Running ${cli} ${installCmdline.join(' ')}`);
-        yield exec.exec(cli, cmdline, options);
+        yield exec.exec(cli, installCmdline, options);
         let serverBinPath = '';
         const infoOptions = {
             silent: true,
