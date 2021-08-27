@@ -15,8 +15,8 @@ inputs:
     required: false
     description: >
       Version of EdgeDB server to install, or "stable" for the latest
-      stable release, or "nightly" for the latest nightly build.
-      Defaults to "stable".
+      stable release, or "nightly" for the latest nightly build,
+      or nothing to skip installaion.
 runs:
   using: 'node12'
   main: 'dist/index.js'
