@@ -59,7 +59,7 @@ async function installServer(
 
   const installCmdline = ['server', 'install'].concat(cmdline)
   core.debug(`Running ${cli} ${installCmdline.join(' ')}`)
-  await exec.exec(cli, cmdline, options)
+  await exec.exec(cli, installCmdline, options)
 
   let serverBinPath = ''
 
