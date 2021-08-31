@@ -49,10 +49,12 @@ const EDGEDB_PKG_IDX = `${exports.EDGEDB_PKG_ROOT}/archive/.jsonindexes`;
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const cliPath = yield installCLI();
-            const serverPath = yield installServer(cliPath);
+            const cliVersion = core.getInput('cli-version');
+            const cliPath = yield installCLI(cliVersion);
             core.addPath(cliPath);
-            if (serverPath !== '') {
+            const serverVersion = core.getInput('server-version');
+            if (serverVersion !== 'none') {
+                const serverPath = yield installServer(serverVersion, cliPath);
                 core.addPath(serverPath);
             }
         }
@@ -62,12 +64,8 @@ function run() {
     });
 }
 exports.run = run;
-function installServer(cliPath) {
+function installServer(requestedVersion, cliPath) {
     return __awaiter(this, void 0, void 0, function* () {
-        const requestedVersion = core.getInput('server-version');
-        if (requestedVersion === '') {
-            return '';
-        }
         const options = {
             silent: true,
             listeners: {
@@ -112,9 +110,8 @@ function installServer(cliPath) {
         return path.dirname(serverBinPath);
     });
 }
-function installCLI() {
+function installCLI(requestedCliVersion) {
     return __awaiter(this, void 0, void 0, function* () {
-        const requestedCliVersion = core.getInput('cli-version');
         const arch = os.arch();
         const includeCliPrereleases = true;
         let cliVersionRange = '*';
