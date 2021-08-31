@@ -15,13 +15,14 @@ export async function run(): Promise<void> {
   try {
     const cliVersion = core.getInput('cli-version')
     const cliPath = await installCLI(cliVersion)
-    core.addPath(cliPath)
 
     const serverVersion = core.getInput('server-version')
     if (serverVersion !== 'none') {
       const serverPath = await installServer(serverVersion, cliPath)
       core.addPath(serverPath)
     }
+
+    core.addPath(cliPath)
   } catch (error) {
     core.setFailed(error.message)
   }
