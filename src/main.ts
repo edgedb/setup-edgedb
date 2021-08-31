@@ -13,17 +13,25 @@ const EDGEDB_PKG_IDX = `${EDGEDB_PKG_ROOT}/archive/.jsonindexes`
 
 export async function run(): Promise<void> {
   try {
-    const cliPath = await installCLI()
-    const serverPath = await installServer(cliPath)
-    core.addPath(serverPath)
+    const cliVersion = core.getInput('cli-version')
+    const cliPath = await installCLI(cliVersion)
+
+    const serverVersion = core.getInput('server-version')
+    if (serverVersion !== 'none') {
+      const serverPath = await installServer(serverVersion, cliPath)
+      core.addPath(serverPath)
+    }
+
     core.addPath(cliPath)
   } catch (error) {
     core.setFailed(error.message)
   }
 }
 
-async function installServer(cliPath: string): Promise<string> {
-  const requestedVersion = core.getInput('server-version')
+async function installServer(
+  requestedVersion: string,
+  cliPath: string
+): Promise<string> {
   const options: ExecOptions = {
     silent: true,
     listeners: {
@@ -76,8 +84,7 @@ async function installServer(cliPath: string): Promise<string> {
   return path.dirname(serverBinPath)
 }
 
-async function installCLI(): Promise<string> {
-  const requestedCliVersion = core.getInput('cli-version')
+async function installCLI(requestedCliVersion: string): Promise<string> {
   const arch = os.arch()
   const includeCliPrereleases = true
   let cliVersionRange = '*'
