@@ -8,7 +8,7 @@ inputs:
       Version range or exact version of EdgeDB CLI to set up,
       using SemVer's version range syntax, or one of the predefined
       rolling version specifiers: "nightly" for the latest nightly
-      build, "stable" for the latest stable release.  Defaults to
+      build, "stable" for the latest stable release. Defaults to
       "stable".
     default: 'stable'
   server-version:
@@ -16,7 +16,7 @@ inputs:
     description: >
       Version of EdgeDB server to install, or "stable" for the latest
       stable release, or "nightly" for the latest nightly build,
-      or "none" to skip installaion.
+      or "none" to skip installaion. Defaults to "stable".
     default: 'stable'
 runs:
   using: 'node12'
