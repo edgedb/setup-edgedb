@@ -28,6 +28,7 @@ process.env['RUNNER_TEMP'] = tempDir
 describe('setup-edgedb', () => {
   let inputs = {} as any
   let inSpy: jest.SpyInstance
+  let inBooleanSpy: jest.SpyInstance
   let cnSpy: jest.SpyInstance
   let logSpy: jest.SpyInstance
   let dbgSpy: jest.SpyInstance
@@ -41,9 +42,13 @@ describe('setup-edgedb', () => {
     // @actions/core
     console.log('::stop-commands::stoptoken')
     process.env['GITHUB_PATH'] = ''
-    inputs = {}
+    inputs = {
+      'project-link': false
+    }
     inSpy = jest.spyOn(core, 'getInput')
-    inSpy.mockImplementation(name => inputs[name])
+    inSpy.mockImplementation(name => inputs[name] || '')
+    inBooleanSpy = jest.spyOn(core, 'getBooleanInput')
+    inBooleanSpy.mockImplementation(name => inputs[name])
 
     // @actions/tool-cache
     dlSpy = jest.spyOn(tc, 'downloadTool')
