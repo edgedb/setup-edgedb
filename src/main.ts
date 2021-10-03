@@ -12,55 +12,47 @@ export const EDGEDB_PKG_ROOT = 'https://packages.edgedb.com'
 const EDGEDB_PKG_IDX = `${EDGEDB_PKG_ROOT}/archive/.jsonindexes`
 
 export async function run(): Promise<void> {
+  const cliVersion = core.getInput('cli-version')
+
+  let serverVersion: string | null = core.getInput('server-version')
+  if (serverVersion === '' || serverVersion === 'none') {
+    serverVersion = null
+  }
+
+  let projectLink: string | null = core.getInput('project-link')
+  if (projectLink === '' || projectLink === 'false') {
+    projectLink = null
+  }
+
+  let instanceName: string | null = core.getInput('instance-name')
+  if (instanceName === '') {
+    instanceName = null
+  }
+
   try {
-    const cliVersion = core.getInput('cli-version')
     const cliPath = await installCLI(cliVersion)
 
-    const serverVersion = core.getInput('server-version')
-    if (serverVersion !== 'none') {
+    if (projectLink) {
+      core.addPath(cliPath)
+
+      await linkProject(projectLink, instanceName)
+
+      return
+    }
+
+    if (serverVersion) {
       const serverPath = await installServer(serverVersion, cliPath)
       core.addPath(serverPath)
-    }
 
-    core.addPath(cliPath)
+      core.addPath(cliPath)
 
-    const instance = core.getInput('instance')
-    const user = core.getInput('user')
-    const password = core.getInput('password')
-    const host = core.getInput('host')
-    const port = core.getInput('port')
-    const tlsCertData = core.getInput('tls-cert-data')
-    const shouldLinkToProject = core.getBooleanInput('project-link')
-
-    let tlsVerifyHostname = null
-    if (core.getInput('tls-verify-hostname') !== '') {
-      tlsVerifyHostname = core.getBooleanInput('tls-verify-hostname')
-    } else if (tlsCertData !== '') {
-      tlsVerifyHostname = true
-    }
-
-    let trustTlsCert = true
-    if (core.getInput('trust-tls-cert') !== '') {
-      trustTlsCert = core.getBooleanInput('trust-tls-cert')
-    } else if (tlsCertData !== '') {
-      trustTlsCert = false
-    }
-
-    if (instance !== '') {
-      await createInstance(
-        instance,
-        user,
-        password,
-        host,
-        port,
-        tlsCertData,
-        tlsVerifyHostname,
-        trustTlsCert
-      )
-
-      if (shouldLinkToProject) {
-        await linkInstanceWithProject(instance)
+      if (isRunningInsideProject()) {
+        await initProject(instanceName, serverVersion)
+      } else if (instanceName) {
+        await createNamedInstance(instanceName, serverVersion)
       }
+    } else {
+      core.addPath(cliPath)
     }
   } catch (error) {
     core.setFailed(error.message)
@@ -68,7 +60,7 @@ export async function run(): Promise<void> {
 }
 
 async function installServer(
-  requestedVersion: string,
+  requestedVersion: string | null,
   cliPath: string
 ): Promise<string> {
   const options: ExecOptions = {
@@ -88,11 +80,7 @@ async function installServer(
 
   if (requestedVersion === 'nightly') {
     cmdline.push('--nightly')
-  } else if (
-    requestedVersion !== undefined &&
-    requestedVersion !== '' &&
-    requestedVersion !== 'stable'
-  ) {
+  } else if (requestedVersion && requestedVersion !== 'stable') {
     cmdline.push('--version')
     cmdline.push(requestedVersion)
   }
@@ -163,94 +151,6 @@ async function installCLI(requestedCliVersion: string): Promise<string> {
   return cliDirectory
 }
 
-async function createInstance(
-  instance: string,
-  user: string,
-  password: string,
-  host: string,
-  port: string,
-  tlsCertData: string,
-  tlsVerifyHostname: boolean | null,
-  trustTlsCert: boolean
-): Promise<void> {
-  const options: ExecOptions = {
-    silent: true,
-    listeners: {
-      stdout: (data: Buffer) => {
-        core.debug(data.toString().trim())
-      },
-      stderr: (data: Buffer) => {
-        core.debug(data.toString().trim())
-      }
-    }
-  }
-
-  const baseOptionsLine = ['--user', user, '--host', host, '--port', port]
-
-  if (password !== '') {
-    options['input'] = Buffer.from(password)
-    baseOptionsLine.push('--password-from-stdin')
-  }
-
-  if (tlsCertData !== '') {
-    const certPath = saveCertData(tlsCertData)
-    baseOptionsLine.push('--tls-ca-file', certPath)
-  }
-
-  switch (tlsVerifyHostname) {
-    case null:
-      break
-
-    case true:
-      baseOptionsLine.push('--tls-verify-hostname')
-      break
-
-    case false:
-      baseOptionsLine.push('--no-tls-verify-hostname')
-      break
-  }
-
-  const cmdOptionsLine = []
-  if (trustTlsCert) {
-    cmdOptionsLine.push('--trust-tls-cert')
-  }
-
-  const cmdLine = ['instance', 'link', '--non-interactive', instance]
-    .concat(cmdOptionsLine)
-    .concat(baseOptionsLine)
-  const cli = 'edgedb'
-
-  core.debug(`Running ${cli} ${cmdLine.join(' ')}`)
-  await exec.exec(cli, cmdLine, options)
-}
-
-async function linkInstanceWithProject(instance: string): Promise<void> {
-  const options: ExecOptions = {
-    silent: true,
-    listeners: {
-      stdout: (data: Buffer) => {
-        core.debug(data.toString().trim())
-      },
-      stderr: (data: Buffer) => {
-        core.debug(data.toString().trim())
-      }
-    }
-  }
-
-  const cmdLine = [
-    'project',
-    'init',
-    '--non-interactive',
-    '--link',
-    '--server-instance',
-    instance
-  ]
-  const cli = 'edgedb'
-
-  core.debug(`Running ${cli} ${cmdLine.join(' ')}`)
-  await exec.exec(cli, cmdLine, options)
-}
-
 export async function getMatchingVer(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   versionMap: Map<string, any>,
@@ -316,9 +216,121 @@ export function getBaseDist(arch: string, platform: string): string {
   return `${distPlatform}-${distArch}`
 }
 
-function saveCertData(certData: string): string {
-  const tmpdir = fs.mkdtempSync('setup-edgedb')
-  const certPath = path.join(tmpdir, 'cert.pem')
-  fs.writeFileSync(certPath, certData)
-  return certPath
+async function linkProject(
+  dsn: string,
+  instanceName: string | null
+): Promise<void> {
+  instanceName = instanceName || generateIntanceName()
+
+  const cli = 'edgedb'
+  const options: ExecOptions = {
+    silent: true,
+    listeners: {
+      stdout: (data: Buffer) => {
+        core.debug(data.toString().trim())
+      },
+      stderr: (data: Buffer) => {
+        core.debug(data.toString().trim())
+      }
+    }
+  }
+
+  const instanceLinkCmdLine = [
+    'instance',
+    'link',
+    '--non-interactive',
+    '--trust-tls-cert',
+    '--dsn',
+    dsn,
+    instanceName
+  ]
+  core.debug(`Running ${cli} ${instanceLinkCmdLine.join(' ')}`)
+  await exec.exec(cli, instanceLinkCmdLine, options)
+
+  const projectLinkCmdLine = [
+    'project',
+    'init',
+    '--non-interactive',
+    '--link',
+    '--server-instance',
+    instanceName
+  ]
+  core.debug(`Running ${cli} ${projectLinkCmdLine.join(' ')}`)
+  await exec.exec(cli, projectLinkCmdLine, options)
+}
+
+async function initProject(
+  instanceName: string | null,
+  serverVersion: string
+): Promise<void> {
+  instanceName = instanceName || generateIntanceName()
+
+  const cli = 'edgedb'
+  const options: ExecOptions = {
+    silent: true,
+    listeners: {
+      stdout: (data: Buffer) => {
+        core.debug(data.toString().trim())
+      },
+      stderr: (data: Buffer) => {
+        core.debug(data.toString().trim())
+      }
+    }
+  }
+
+  const cmdOptionsLine = ['--server-instance', instanceName]
+  if (serverVersion && serverVersion !== 'stable') {
+    cmdOptionsLine.push('--server-version', serverVersion)
+  }
+
+  const cmdLine = ['project', 'init', '--non-interactive'].concat(
+    cmdOptionsLine
+  )
+  core.debug(`Running ${cli} ${cmdLine.join(' ')}`)
+  await exec.exec(cli, cmdLine, options)
+}
+
+async function createNamedInstance(
+  instanceName: string,
+  serverVersion: string
+): Promise<void> {
+  const cli = 'edgedb'
+  const options: ExecOptions = {
+    silent: true,
+    listeners: {
+      stdout: (data: Buffer) => {
+        core.debug(data.toString().trim())
+      },
+      stderr: (data: Buffer) => {
+        core.debug(data.toString().trim())
+      }
+    }
+  }
+
+  const cmdOptionsLine = []
+  if (serverVersion === 'nightly') {
+    cmdOptionsLine.push('--nightly')
+  } else if (serverVersion && serverVersion !== 'stable') {
+    cmdOptionsLine.push('--version', serverVersion)
+  }
+
+  const cmdLine = ['instance', 'create', instanceName].concat(cmdOptionsLine)
+  core.debug(`Running ${cli} ${cmdLine.join(' ')}`)
+  await exec.exec(cli, cmdLine, options)
+}
+
+function isRunningInsideProject(): boolean {
+  try {
+    fs.accessSync('edgedb.toml')
+    return true
+  } catch (error) {
+    return false
+  }
+}
+
+function generateIntanceName(): string {
+  const start = 1000
+  const end = 9999
+  const suffix = Math.floor(Math.random() * (end - start) + start)
+  return `ghactions_${suffix}`
 }

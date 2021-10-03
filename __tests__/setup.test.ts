@@ -101,6 +101,41 @@ describe('setup-edgedb', () => {
 
     findSpy.mockImplementation(() => '')
 
+    const cliPath = path.normalize('/cache/edgedb/1.0.0-alpha.7')
+    cacheSpy.mockImplementation(async () => cliPath)
+
+    await main.run()
+
+    fs.unlinkSync(tmp)
+    fs.rmdirSync(tmpdir)
+
+    expect(dlSpy).toHaveBeenCalled()
+    expect(logSpy).toHaveBeenCalledWith(
+      `Downloading edgedb-cli ${resolvedVersion} - ${os.arch} from ${expectedUrl}`
+    )
+    expect(cnSpy).toHaveBeenCalledWith(`::add-path::${cliPath}${os.EOL}`)
+  })
+
+  it('Installs server', async () => {
+    let versionSpec = '1.0.0-alpha.7'
+    let resolvedVersion = versionSpec
+
+    inputs['cli-version'] = '>=1.0.0-alpha.5 <=1.0.0-alpha.7'
+    inputs['server-version'] = 'stable'
+
+    const baseDist = main.getBaseDist(os.arch(), os.platform())
+    const pkgBase = `https://packages.edgedb.com/archive/${baseDist}`
+    const expectedUrl = pkgBase + '/edgedb-cli_1.0.0-alpha.7_2020121617'
+
+    const tmpdir = fs.mkdtempSync('edgedb-setup')
+    let tmp = path.join(tmpdir, 'foo')
+    fs.closeSync(fs.openSync(tmp, 'w'))
+    tmp = fs.realpathSync(tmp)
+
+    dlSpy.mockImplementation(async () => tmp)
+
+    findSpy.mockImplementation(() => '')
+
     execSpy.mockImplementation(async (cmd, args, opts: ExecOptions) => {
       if (args[0] === 'server' && args[1] === 'install') {
         return 0

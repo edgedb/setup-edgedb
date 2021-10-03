@@ -18,59 +18,18 @@ inputs:
       stable release, or "nightly" for the latest nightly build,
       or "none" to skip installaion. Defaults to "stable".
     default: 'stable'
-  user:
+  instance-name:
     required: false
     description: >
-      Username that will be used to connect to EdgeDB when creating an instance.
-      Defaults to "edgedb".
-    default: 'edgedb'
-  password:
-    required: false
-    description: >
-      Password for user that will be used to connect to EdgeDB when creating an instance.
-      By default, the value is omitted, which leads to a connection without password.
-  host:
-    required: false
-    description: >
-      Host of server that will be used to connect to EdgeDB when creating an instance.
-      Defaults to "localhost".
-    default: 'localhost'
-  port:
-    required: false
-    description: >
-      Port number of server that will be used to connect to EdgeDB when creating an instance.
-      Defaults to 5656.
-    default: '5656'
-  tls-verify-hostname:
-    required: false
-    description: >
-      Boolean flag indicating whether the hostname of EdgeDB server should be verified when using custom
-      certificate. By default, it will be implicitly enabled if "tls-cert-data" argument is passed.
-  tls-cert-data:
-    required: false
-    description: >
-      Certificate data that should be used to connect to remote EdgeDB server.
-      By default, the value is omitted and instance linking process will trust server certificate.
-  instance:
-    required: false
-    description: >
-      Name of EdgeDB instance to be given when creating the link. This is used together with
-      connection arguments, such as "user", "password", "host" and "port".
-      If an empty string is used, the instance creation will be skipped.
-      Note that skipping instance linking will also result in skipping linking the project,
-      even if this argument is explicitly set. By default an empty string is used.
+      Name of EdgeDB instance to be used when creating new instance,
+      linking or initializing the project. By default, it won't be used.
     default: ''
-  trust-tls-cert:
-    required: false
-    description: >
-      Boolean flag indicating whether the CLI should trust certificate from EdgeDB server
-      when creating new instance. Defaults to true unless "tls-cert-data" argument passed.
   project-link:
     required: false
     description: >
-      Boolean flag indicating whether the project should be linked with EdgeDB instance.
-      Defaults to true.
-    default: 'true'
+      DSN that is used for linking EdgeDB server to project.
+      By default, it won't be used.
+    default: 'false'
 runs:
   using: 'node12'
   main: 'dist/index.js'

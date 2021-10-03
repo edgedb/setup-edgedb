@@ -48,41 +48,39 @@ exports.EDGEDB_PKG_ROOT = 'https://packages.edgedb.com';
 const EDGEDB_PKG_IDX = `${exports.EDGEDB_PKG_ROOT}/archive/.jsonindexes`;
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
+        const cliVersion = core.getInput('cli-version');
+        let serverVersion = core.getInput('server-version');
+        if (serverVersion === '' || serverVersion === 'none') {
+            serverVersion = null;
+        }
+        let projectLink = core.getInput('project-link');
+        if (projectLink === '' || projectLink === 'false') {
+            projectLink = null;
+        }
+        let instanceName = core.getInput('instance-name');
+        if (instanceName === '') {
+            instanceName = null;
+        }
         try {
-            const cliVersion = core.getInput('cli-version');
             const cliPath = yield installCLI(cliVersion);
-            const serverVersion = core.getInput('server-version');
-            if (serverVersion !== 'none') {
+            if (projectLink) {
+                core.addPath(cliPath);
+                yield linkProject(projectLink, instanceName);
+                return;
+            }
+            if (serverVersion) {
                 const serverPath = yield installServer(serverVersion, cliPath);
                 core.addPath(serverPath);
-            }
-            core.addPath(cliPath);
-            const instance = core.getInput('instance');
-            const user = core.getInput('user');
-            const password = core.getInput('password');
-            const host = core.getInput('host');
-            const port = core.getInput('port');
-            const tlsCertData = core.getInput('tls-cert-data');
-            const shouldLinkToProject = core.getBooleanInput('project-link');
-            let tlsVerifyHostname = null;
-            if (core.getInput('tls-verify-hostname') !== '') {
-                tlsVerifyHostname = core.getBooleanInput('tls-verify-hostname');
-            }
-            else if (tlsCertData !== '') {
-                tlsVerifyHostname = true;
-            }
-            let trustTlsCert = true;
-            if (core.getInput('trust-tls-cert') !== '') {
-                trustTlsCert = core.getBooleanInput('trust-tls-cert');
-            }
-            else if (tlsCertData !== '') {
-                trustTlsCert = false;
-            }
-            if (instance !== '') {
-                yield createInstance(instance, user, password, host, port, tlsCertData, tlsVerifyHostname, trustTlsCert);
-                if (shouldLinkToProject) {
-                    yield linkInstanceWithProject(instance);
+                core.addPath(cliPath);
+                if (isRunningInsideProject()) {
+                    yield initProject(instanceName, serverVersion);
                 }
+                else if (instanceName) {
+                    yield createNamedInstance(instanceName, serverVersion);
+                }
+            }
+            else {
+                core.addPath(cliPath);
             }
         }
         catch (error) {
@@ -109,9 +107,7 @@ function installServer(requestedVersion, cliPath) {
         if (requestedVersion === 'nightly') {
             cmdline.push('--nightly');
         }
-        else if (requestedVersion !== undefined &&
-            requestedVersion !== '' &&
-            requestedVersion !== 'stable') {
+        else if (requestedVersion && requestedVersion !== 'stable') {
             cmdline.push('--version');
             cmdline.push(requestedVersion);
         }
@@ -161,76 +157,6 @@ function installCLI(requestedCliVersion) {
             cliDirectory = yield tc.cacheFile(downloadPath, 'edgedb', 'edgedb-cli', matchingVer, arch);
         }
         return cliDirectory;
-    });
-}
-function createInstance(instance, user, password, host, port, tlsCertData, tlsVerifyHostname, trustTlsCert) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const options = {
-            silent: true,
-            listeners: {
-                stdout: (data) => {
-                    core.debug(data.toString().trim());
-                },
-                stderr: (data) => {
-                    core.debug(data.toString().trim());
-                }
-            }
-        };
-        const baseOptionsLine = ['--user', user, '--host', host, '--port', port];
-        if (password !== '') {
-            options['input'] = Buffer.from(password);
-            baseOptionsLine.push('--password-from-stdin');
-        }
-        if (tlsCertData !== '') {
-            const certPath = saveCertData(tlsCertData);
-            baseOptionsLine.push('--tls-ca-file', certPath);
-        }
-        switch (tlsVerifyHostname) {
-            case null:
-                break;
-            case true:
-                baseOptionsLine.push('--tls-verify-hostname');
-                break;
-            case false:
-                baseOptionsLine.push('--no-tls-verify-hostname');
-                break;
-        }
-        const cmdOptionsLine = [];
-        if (trustTlsCert) {
-            cmdOptionsLine.push('--trust-tls-cert');
-        }
-        const cmdLine = ['instance', 'link', '--non-interactive', instance]
-            .concat(cmdOptionsLine)
-            .concat(baseOptionsLine);
-        const cli = 'edgedb';
-        core.debug(`Running ${cli} ${cmdLine.join(' ')}`);
-        yield exec.exec(cli, cmdLine, options);
-    });
-}
-function linkInstanceWithProject(instance) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const options = {
-            silent: true,
-            listeners: {
-                stdout: (data) => {
-                    core.debug(data.toString().trim());
-                },
-                stderr: (data) => {
-                    core.debug(data.toString().trim());
-                }
-            }
-        };
-        const cmdLine = [
-            'project',
-            'init',
-            '--non-interactive',
-            '--link',
-            '--server-instance',
-            instance
-        ];
-        const cli = 'edgedb';
-        core.debug(`Running ${cli} ${cmdLine.join(' ')}`);
-        yield exec.exec(cli, cmdLine, options);
     });
 }
 function getMatchingVer(
@@ -291,11 +217,108 @@ function getBaseDist(arch, platform) {
     return `${distPlatform}-${distArch}`;
 }
 exports.getBaseDist = getBaseDist;
-function saveCertData(certData) {
-    const tmpdir = fs.mkdtempSync('setup-edgedb');
-    const certPath = path.join(tmpdir, 'cert.pem');
-    fs.writeFileSync(certPath, certData);
-    return certPath;
+function linkProject(dsn, instanceName) {
+    return __awaiter(this, void 0, void 0, function* () {
+        instanceName = instanceName || generateIntanceName();
+        const cli = 'edgedb';
+        const options = {
+            silent: true,
+            listeners: {
+                stdout: (data) => {
+                    core.debug(data.toString().trim());
+                },
+                stderr: (data) => {
+                    core.debug(data.toString().trim());
+                }
+            }
+        };
+        const instanceLinkCmdLine = [
+            'instance',
+            'link',
+            '--non-interactive',
+            '--trust-tls-cert',
+            '--dsn',
+            dsn,
+            instanceName
+        ];
+        core.debug(`Running ${cli} ${instanceLinkCmdLine.join(' ')}`);
+        yield exec.exec(cli, instanceLinkCmdLine, options);
+        const projectLinkCmdLine = [
+            'project',
+            'init',
+            '--non-interactive',
+            '--link',
+            '--server-instance',
+            instanceName
+        ];
+        core.debug(`Running ${cli} ${projectLinkCmdLine.join(' ')}`);
+        yield exec.exec(cli, projectLinkCmdLine, options);
+    });
+}
+function initProject(instanceName, serverVersion) {
+    return __awaiter(this, void 0, void 0, function* () {
+        instanceName = instanceName || generateIntanceName();
+        const cli = 'edgedb';
+        const options = {
+            silent: true,
+            listeners: {
+                stdout: (data) => {
+                    core.debug(data.toString().trim());
+                },
+                stderr: (data) => {
+                    core.debug(data.toString().trim());
+                }
+            }
+        };
+        const cmdOptionsLine = ['--server-instance', instanceName];
+        if (serverVersion && serverVersion !== 'stable') {
+            cmdOptionsLine.push('--server-version', serverVersion);
+        }
+        const cmdLine = ['project', 'init', '--non-interactive'].concat(cmdOptionsLine);
+        core.debug(`Running ${cli} ${cmdLine.join(' ')}`);
+        yield exec.exec(cli, cmdLine, options);
+    });
+}
+function createNamedInstance(instanceName, serverVersion) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const cli = 'edgedb';
+        const options = {
+            silent: true,
+            listeners: {
+                stdout: (data) => {
+                    core.debug(data.toString().trim());
+                },
+                stderr: (data) => {
+                    core.debug(data.toString().trim());
+                }
+            }
+        };
+        const cmdOptionsLine = [];
+        if (serverVersion === 'nightly') {
+            cmdOptionsLine.push('--nightly');
+        }
+        else if (serverVersion && serverVersion !== 'stable') {
+            cmdOptionsLine.push('--version', serverVersion);
+        }
+        const cmdLine = ['instance', 'create', instanceName].concat(cmdOptionsLine);
+        core.debug(`Running ${cli} ${cmdLine.join(' ')}`);
+        yield exec.exec(cli, cmdLine, options);
+    });
+}
+function isRunningInsideProject() {
+    try {
+        fs.accessSync('edgedb.toml');
+        return true;
+    }
+    catch (error) {
+        return false;
+    }
+}
+function generateIntanceName() {
+    const start = 1000;
+    const end = 9999;
+    const suffix = Math.floor(Math.random() * (end - start) + start);
+    return `ghactions_${suffix}`;
 }
 
 
