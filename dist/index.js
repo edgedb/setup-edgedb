@@ -38,6 +38,8 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getBaseDist = exports.getVersionMap = exports.getMatchingVer = exports.run = exports.EDGEDB_PKG_ROOT = void 0;
 const core = __importStar(__nccwpck_require__(2186));
 const exec = __importStar(__nccwpck_require__(1514));
+const io = __importStar(__nccwpck_require__(7436));
+const cp = __importStar(__nccwpck_require__(3129));
 const tc = __importStar(__nccwpck_require__(7784));
 const fs = __importStar(__nccwpck_require__(5747));
 const fetch = __importStar(__nccwpck_require__(467));
@@ -72,11 +74,14 @@ function run() {
                 const serverPath = yield installServer(serverVersion, cliPath);
                 core.addPath(serverPath);
                 core.addPath(cliPath);
+                const runstateDir = generateRunstateDir();
                 if (isRunningInsideProject()) {
-                    yield initProject(instanceName, serverVersion);
+                    yield initProject(instanceName, serverVersion, runstateDir);
+                    core.setOutput('runstate-dir', runstateDir);
                 }
                 else if (instanceName) {
-                    yield createNamedInstance(instanceName, serverVersion);
+                    yield createNamedInstance(instanceName, serverVersion, runstateDir);
+                    core.setOutput('runstate-dir', runstateDir);
                 }
             }
             else {
@@ -255,12 +260,15 @@ function linkProject(dsn, instanceName) {
         yield exec.exec(cli, projectLinkCmdLine, options);
     });
 }
-function initProject(instanceName, serverVersion) {
+function initProject(instanceName, serverVersion, runstateDir) {
     return __awaiter(this, void 0, void 0, function* () {
         instanceName = instanceName || generateIntanceName();
         const cli = 'edgedb';
         const options = {
             silent: true,
+            env: {
+                XDG_RUNTIME_DIR: runstateDir
+            },
             listeners: {
                 stdout: (data) => {
                     core.debug(data.toString().trim());
@@ -270,20 +278,30 @@ function initProject(instanceName, serverVersion) {
                 }
             }
         };
-        const cmdOptionsLine = ['--server-instance', instanceName];
+        const cmdOptionsLine = [
+            '--non-interactive',
+            '--server-start-conf',
+            'manual',
+            '--server-instance',
+            instanceName
+        ];
         if (serverVersion && serverVersion !== 'stable') {
             cmdOptionsLine.push('--server-version', serverVersion);
         }
-        const cmdLine = ['project', 'init', '--non-interactive'].concat(cmdOptionsLine);
+        const cmdLine = ['project', 'init'].concat(cmdOptionsLine);
         core.debug(`Running ${cli} ${cmdLine.join(' ')}`);
         yield exec.exec(cli, cmdLine, options);
+        yield startInstance(instanceName, runstateDir);
     });
 }
-function createNamedInstance(instanceName, serverVersion) {
+function createNamedInstance(instanceName, serverVersion, runstateDir) {
     return __awaiter(this, void 0, void 0, function* () {
         const cli = 'edgedb';
         const options = {
             silent: true,
+            env: {
+                XDG_RUNTIME_DIR: runstateDir
+            },
             listeners: {
                 stdout: (data) => {
                     core.debug(data.toString().trim());
@@ -293,7 +311,7 @@ function createNamedInstance(instanceName, serverVersion) {
                 }
             }
         };
-        const cmdOptionsLine = [];
+        const cmdOptionsLine = ['--start-conf', 'manual'];
         if (serverVersion === 'nightly') {
             cmdOptionsLine.push('--nightly');
         }
@@ -303,6 +321,20 @@ function createNamedInstance(instanceName, serverVersion) {
         const cmdLine = ['instance', 'create', instanceName].concat(cmdOptionsLine);
         core.debug(`Running ${cli} ${cmdLine.join(' ')}`);
         yield exec.exec(cli, cmdLine, options);
+        yield startInstance(instanceName, runstateDir);
+    });
+}
+function startInstance(instanceName, runstateDir) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const cli = 'edgedb';
+        const options = {
+            env: {
+                XDG_RUNTIME_DIR: runstateDir
+            }
+        };
+        const cmdLine = ['instance', 'start', '--foreground', instanceName];
+        core.debug(`Running ${cli} ${cmdLine.join(' ')} in background`);
+        yield backgroundExec(cli, cmdLine, options);
     });
 }
 function isRunningInsideProject() {
@@ -319,6 +351,21 @@ function generateIntanceName() {
     const end = 9999;
     const suffix = Math.floor(Math.random() * (end - start) + start);
     return `ghactions_${suffix}`;
+}
+function generateRunstateDir() {
+    return fs.mkdtempSync(path.join(os.tmpdir(), 'edgedb-server-'));
+}
+function backgroundExec(command, args, options) {
+    return __awaiter(this, void 0, void 0, function* () {
+        command = yield io.which(command, true);
+        const spawnOptions = {
+            stdio: 'ignore',
+            detached: true,
+            env: options.env
+        };
+        const serverProcess = cp.spawn(command, args, spawnOptions);
+        serverProcess.unref();
+    });
 }
 
 

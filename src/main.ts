@@ -1,6 +1,8 @@
 import * as core from '@actions/core'
 import * as exec from '@actions/exec'
 import {ExecOptions} from '@actions/exec/lib/interfaces'
+import * as io from '@actions/io'
+import * as cp from 'child_process'
 import * as tc from '@actions/tool-cache'
 import * as fs from 'fs'
 import * as fetch from 'node-fetch'
@@ -46,10 +48,13 @@ export async function run(): Promise<void> {
 
       core.addPath(cliPath)
 
+      const runstateDir = generateRunstateDir()
       if (isRunningInsideProject()) {
-        await initProject(instanceName, serverVersion)
+        await initProject(instanceName, serverVersion, runstateDir)
+        core.setOutput('runstate-dir', runstateDir)
       } else if (instanceName) {
-        await createNamedInstance(instanceName, serverVersion)
+        await createNamedInstance(instanceName, serverVersion, runstateDir)
+        core.setOutput('runstate-dir', runstateDir)
       }
     } else {
       core.addPath(cliPath)
@@ -261,13 +266,17 @@ async function linkProject(
 
 async function initProject(
   instanceName: string | null,
-  serverVersion: string
+  serverVersion: string,
+  runstateDir: string
 ): Promise<void> {
   instanceName = instanceName || generateIntanceName()
 
   const cli = 'edgedb'
   const options: ExecOptions = {
     silent: true,
+    env: {
+      XDG_RUNTIME_DIR: runstateDir
+    },
     listeners: {
       stdout: (data: Buffer) => {
         core.debug(data.toString().trim())
@@ -278,25 +287,36 @@ async function initProject(
     }
   }
 
-  const cmdOptionsLine = ['--server-instance', instanceName]
+  const cmdOptionsLine = [
+    '--non-interactive',
+    '--server-start-conf',
+    'manual',
+    '--server-instance',
+    instanceName
+  ]
   if (serverVersion && serverVersion !== 'stable') {
     cmdOptionsLine.push('--server-version', serverVersion)
   }
 
-  const cmdLine = ['project', 'init', '--non-interactive'].concat(
-    cmdOptionsLine
-  )
+  const cmdLine = ['project', 'init'].concat(cmdOptionsLine)
   core.debug(`Running ${cli} ${cmdLine.join(' ')}`)
   await exec.exec(cli, cmdLine, options)
+
+  await startInstance(instanceName, runstateDir)
 }
 
 async function createNamedInstance(
   instanceName: string,
-  serverVersion: string
+  serverVersion: string,
+  runstateDir: string
 ): Promise<void> {
   const cli = 'edgedb'
+
   const options: ExecOptions = {
     silent: true,
+    env: {
+      XDG_RUNTIME_DIR: runstateDir
+    },
     listeners: {
       stdout: (data: Buffer) => {
         core.debug(data.toString().trim())
@@ -307,7 +327,7 @@ async function createNamedInstance(
     }
   }
 
-  const cmdOptionsLine = []
+  const cmdOptionsLine = ['--start-conf', 'manual']
   if (serverVersion === 'nightly') {
     cmdOptionsLine.push('--nightly')
   } else if (serverVersion && serverVersion !== 'stable') {
@@ -317,6 +337,25 @@ async function createNamedInstance(
   const cmdLine = ['instance', 'create', instanceName].concat(cmdOptionsLine)
   core.debug(`Running ${cli} ${cmdLine.join(' ')}`)
   await exec.exec(cli, cmdLine, options)
+
+  await startInstance(instanceName, runstateDir)
+}
+
+async function startInstance(
+  instanceName: string,
+  runstateDir: string
+): Promise<void> {
+  const cli = 'edgedb'
+
+  const options: ExecOptions = {
+    env: {
+      XDG_RUNTIME_DIR: runstateDir
+    }
+  }
+
+  const cmdLine = ['instance', 'start', '--foreground', instanceName]
+  core.debug(`Running ${cli} ${cmdLine.join(' ')} in background`)
+  await backgroundExec(cli, cmdLine, options)
 }
 
 function isRunningInsideProject(): boolean {
@@ -333,4 +372,25 @@ function generateIntanceName(): string {
   const end = 9999
   const suffix = Math.floor(Math.random() * (end - start) + start)
   return `ghactions_${suffix}`
+}
+
+function generateRunstateDir(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'edgedb-server-'))
+}
+
+async function backgroundExec(
+  command: string,
+  args: string[],
+  options: ExecOptions
+): Promise<void> {
+  command = await io.which(command, true)
+
+  const spawnOptions: cp.SpawnOptions = {
+    stdio: 'ignore',
+    detached: true,
+    env: options.env
+  }
+
+  const serverProcess = cp.spawn(command, args, spawnOptions)
+  serverProcess.unref()
 }
