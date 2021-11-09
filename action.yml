@@ -22,12 +22,12 @@ inputs:
     required: false
     description: >
       Name of EdgeDB instance to be used when creating new instance,
-      linking or initializing the project. By default, auto-generated name will be used.
+      linking or initializing the project. If not set, the name will be auto-generated.
     default: ''
   project-link:
     required: false
     description: >
-      DSN that is used for linking EdgeDB server to project.
+      If set, specifies the DSN of a remote EdgeDB instance to link to instead of initializing a new local instance.
       By default, a new instance will be initialized.
     default: 'false'
 runs:
