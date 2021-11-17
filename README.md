@@ -106,7 +106,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: edgedb/setup-edgedb@v1
         with:
-          server-version: 1-beta3
+          server-version: 1.0-rc.2
           instance-name: ci_edgedb_instance
       - run: edgedb query "SELECT 'Hello from GitHub Actions!'"
 ```

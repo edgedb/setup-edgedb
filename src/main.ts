@@ -80,7 +80,7 @@ async function installServer(
     }
   }
 
-  const cmdline = ['--method', 'package']
+  const cmdline = []
   const cli = path.join(cliPath, 'edgedb')
 
   if (requestedVersion === 'nightly') {

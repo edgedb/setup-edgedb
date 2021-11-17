@@ -107,7 +107,7 @@ function installServer(requestedVersion, cliPath) {
                 }
             }
         };
-        const cmdline = ['--method', 'package'];
+        const cmdline = [];
         const cli = path.join(cliPath, 'edgedb');
         if (requestedVersion === 'nightly') {
             cmdline.push('--nightly');
