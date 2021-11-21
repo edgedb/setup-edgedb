@@ -82,7 +82,7 @@ jobs:
       edgedb:
         image: edgedb/edgedb:1-rc1
         env:
-          EDGEDB_SERVER_INSECURE_DEV_MODE: 1
+          EDGEDB_SERVER_SECURITY: insecure_dev_mode
         ports:
           - 5656:5656
     steps:
