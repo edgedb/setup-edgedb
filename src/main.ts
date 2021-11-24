@@ -108,6 +108,10 @@ async function installServer(
     }
   }
 
+  if (cmdline.length === 0) {
+    cmdline.push('--latest')
+  }
+
   const infoCmdline = ['server', 'info', '--bin-path'].concat(cmdline)
   core.debug(`Running ${cli} ${infoCmdline.join(' ')}`)
   await exec.exec(cli, infoCmdline, infoOptions)
