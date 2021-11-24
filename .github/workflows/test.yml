@@ -19,17 +19,72 @@ jobs:
       - run: |
           npm run all
   test: # make sure the action works on a clean machine without building
+    name: Test CLI and server installation (CLI ${{ matrix.cli-version }} / server ${{ matrix.server-version }} / OS ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
+        cli-version: [stable, nightly]
+        server-version: [stable, nightly, 1.0-rc.2]
+      fail-fast: false
     steps:
       - uses: actions/checkout@v2
       - uses: ./
+        with:
+          cli-version: ${{ matrix.cli-version }}
+          server-version: ${{ matrix.server-version }}
       - name: Verify installation
         run: |
           edgedb --version
           edgedb-server --version
+  testproject:
+    name: Test integration with EdgeDB projects (CLI ${{ matrix.cli-version }} / server ${{ matrix.server-version }} / OS ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        cli-version: [stable, nightly]
+        server-version: [stable, nightly, 1.0-rc.2]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v2
+      - name: Create edgedb.toml
+        run: |
+          echo -e '[edgedb]\nserver-version = "1.0-rc.2"' >> edgedb.toml
+      - uses: ./
+        with:
+          cli-version: ${{ matrix.cli-version }}
+          server-version: ${{ matrix.server-version }}
+      - name: Verify installation
+        run: |
+          edgedb query "SELECT 'Hello from GitHub Actions'"
+  testprojectlink:
+    name: Test integration with EdgeDB projects using remote instances (CLI ${{ matrix.cli-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cli-version: [stable, nightly]
+      fail-fast: false
+    services:
+      edgedb:
+        image: edgedb/edgedb:1-rc2
+        env:
+          EDGEDB_SERVER_SECURITY: insecure_dev_mode
+        ports:
+          - 5656:5656
+    steps:
+      - uses: actions/checkout@v2
+      - name: Create edgedb.toml
+        run: |
+          echo -e '[edgedb]\nserver-version = "1.0-rc.2"' >> edgedb.toml
+      - uses: ./
+        with:
+          project-link: edgedb://localhost:5656
+          cli-version: ${{ matrix.cli-version }}
+          server-version: none
+      - name: Verify installation
+        run: |
+          edgedb query "SELECT 'Hello from GitHub Actions'"
   testwin:
     runs-on: windows-latest
     steps:
