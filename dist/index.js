@@ -38,6 +38,8 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getBaseDist = exports.getVersionMap = exports.getMatchingVer = exports.run = exports.EDGEDB_PKG_ROOT = void 0;
 const core = __importStar(__nccwpck_require__(2186));
 const exec = __importStar(__nccwpck_require__(1514));
+const io = __importStar(__nccwpck_require__(7436));
+const cp = __importStar(__nccwpck_require__(3129));
 const tc = __importStar(__nccwpck_require__(7784));
 const fs = __importStar(__nccwpck_require__(5747));
 const fetch = __importStar(__nccwpck_require__(467));
@@ -48,15 +50,42 @@ exports.EDGEDB_PKG_ROOT = 'https://packages.edgedb.com';
 const EDGEDB_PKG_IDX = `${exports.EDGEDB_PKG_ROOT}/archive/.jsonindexes`;
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
+        const cliVersion = core.getInput('cli-version');
+        let serverVersion = core.getInput('server-version');
+        if (serverVersion === '' || serverVersion === 'none') {
+            serverVersion = null;
+        }
+        let serverDsn = core.getInput('server-dsn');
+        if (serverDsn === '' || serverDsn === 'false' || serverDsn === 'nonw') {
+            serverDsn = null;
+        }
+        let instanceName = core.getInput('instance-name');
+        if (instanceName === '') {
+            instanceName = null;
+        }
         try {
-            const cliVersion = core.getInput('cli-version');
             const cliPath = yield installCLI(cliVersion);
-            const serverVersion = core.getInput('server-version');
-            if (serverVersion !== 'none') {
+            if (serverDsn) {
+                core.addPath(cliPath);
+                yield linkInstance(serverDsn, instanceName);
+            }
+            else if (serverVersion) {
                 const serverPath = yield installServer(serverVersion, cliPath);
                 core.addPath(serverPath);
+                core.addPath(cliPath);
+                const runstateDir = generateRunstateDir();
+                if (isRunningInsideProject()) {
+                    yield initProject(instanceName, serverVersion, runstateDir);
+                    core.setOutput('runstate-dir', runstateDir);
+                }
+                else if (instanceName) {
+                    yield createNamedInstance(instanceName, serverVersion, runstateDir);
+                    core.setOutput('runstate-dir', runstateDir);
+                }
             }
-            core.addPath(cliPath);
+            else {
+                core.addPath(cliPath);
+            }
         }
         catch (error) {
             core.setFailed(error.message);
@@ -77,14 +106,12 @@ function installServer(requestedVersion, cliPath) {
                 }
             }
         };
-        const cmdline = ['--method', 'package'];
+        const cmdline = [];
         const cli = path.join(cliPath, 'edgedb');
         if (requestedVersion === 'nightly') {
             cmdline.push('--nightly');
         }
-        else if (requestedVersion !== undefined &&
-            requestedVersion !== '' &&
-            requestedVersion !== 'stable') {
+        else if (requestedVersion && requestedVersion !== 'stable') {
             cmdline.push('--version');
             cmdline.push(requestedVersion);
         }
@@ -103,6 +130,9 @@ function installServer(requestedVersion, cliPath) {
                 }
             }
         };
+        if (cmdline.length === 0) {
+            cmdline.push('--latest');
+        }
         const infoCmdline = ['server', 'info', '--bin-path'].concat(cmdline);
         core.debug(`Running ${cli} ${infoCmdline.join(' ')}`);
         yield exec.exec(cli, infoCmdline, infoOptions);
@@ -194,6 +224,153 @@ function getBaseDist(arch, platform) {
     return `${distPlatform}-${distArch}`;
 }
 exports.getBaseDist = getBaseDist;
+function linkInstance(dsn, instanceName) {
+    return __awaiter(this, void 0, void 0, function* () {
+        instanceName = instanceName || generateInstanceName();
+        const cli = 'edgedb';
+        const options = {
+            silent: true,
+            listeners: {
+                stdout: (data) => {
+                    core.debug(data.toString().trim());
+                },
+                stderr: (data) => {
+                    core.debug(data.toString().trim());
+                }
+            }
+        };
+        const instanceLinkCmdLine = [
+            'instance',
+            'link',
+            '--non-interactive',
+            '--trust-tls-cert',
+            '--dsn',
+            dsn,
+            instanceName
+        ];
+        core.debug(`Running ${cli} ${instanceLinkCmdLine.join(' ')}`);
+        yield exec.exec(cli, instanceLinkCmdLine, options);
+        if (isRunningInsideProject()) {
+            const projectLinkCmdLine = [
+                'project',
+                'init',
+                '--non-interactive',
+                '--link',
+                '--server-instance',
+                instanceName
+            ];
+            core.debug(`Running ${cli} ${projectLinkCmdLine.join(' ')}`);
+            yield exec.exec(cli, projectLinkCmdLine, options);
+        }
+    });
+}
+function initProject(instanceName, serverVersion, runstateDir) {
+    return __awaiter(this, void 0, void 0, function* () {
+        instanceName = instanceName || generateInstanceName();
+        const cli = 'edgedb';
+        const options = {
+            silent: true,
+            env: {
+                XDG_RUNTIME_DIR: runstateDir
+            },
+            listeners: {
+                stdout: (data) => {
+                    core.debug(data.toString().trim());
+                },
+                stderr: (data) => {
+                    core.debug(data.toString().trim());
+                }
+            }
+        };
+        const cmdOptionsLine = [
+            '--non-interactive',
+            '--server-start-conf',
+            'manual',
+            '--server-instance',
+            instanceName
+        ];
+        if (serverVersion && serverVersion !== 'stable') {
+            cmdOptionsLine.push('--server-version', serverVersion);
+        }
+        const cmdLine = ['project', 'init'].concat(cmdOptionsLine);
+        core.debug(`Running ${cli} ${cmdLine.join(' ')}`);
+        yield exec.exec(cli, cmdLine, options);
+        yield startInstance(instanceName, runstateDir);
+    });
+}
+function createNamedInstance(instanceName, serverVersion, runstateDir) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const cli = 'edgedb';
+        const options = {
+            silent: true,
+            env: {
+                XDG_RUNTIME_DIR: runstateDir
+            },
+            listeners: {
+                stdout: (data) => {
+                    core.debug(data.toString().trim());
+                },
+                stderr: (data) => {
+                    core.debug(data.toString().trim());
+                }
+            }
+        };
+        const cmdOptionsLine = ['--start-conf', 'manual'];
+        if (serverVersion === 'nightly') {
+            cmdOptionsLine.push('--nightly');
+        }
+        else if (serverVersion && serverVersion !== 'stable') {
+            cmdOptionsLine.push('--version', serverVersion);
+        }
+        const cmdLine = ['instance', 'create', instanceName].concat(cmdOptionsLine);
+        core.debug(`Running ${cli} ${cmdLine.join(' ')}`);
+        yield exec.exec(cli, cmdLine, options);
+        yield startInstance(instanceName, runstateDir);
+    });
+}
+function startInstance(instanceName, runstateDir) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const cli = 'edgedb';
+        const options = {
+            env: {
+                XDG_RUNTIME_DIR: runstateDir
+            }
+        };
+        const cmdLine = ['instance', 'start', '--foreground', instanceName];
+        core.debug(`Running ${cli} ${cmdLine.join(' ')} in background`);
+        yield backgroundExec(cli, cmdLine, options);
+    });
+}
+function isRunningInsideProject() {
+    try {
+        fs.accessSync('edgedb.toml');
+        return true;
+    }
+    catch (error) {
+        return false;
+    }
+}
+function generateInstanceName() {
+    const start = 1000;
+    const end = 9999;
+    const suffix = Math.floor(Math.random() * (end - start) + start);
+    return `ghactions_${suffix}`;
+}
+function generateRunstateDir() {
+    return fs.mkdtempSync(path.join(os.tmpdir(), 'edgedb-server-'));
+}
+function backgroundExec(command, args, options) {
+    return __awaiter(this, void 0, void 0, function* () {
+        command = yield io.which(command, true);
+        const spawnOptions = {
+            stdio: 'ignore',
+            detached: true,
+            env: options.env
+        };
+        const serverProcess = cp.spawn(command, args, spawnOptions);
+        serverProcess.unref();
+    });
+}
 
 
 /***/ }),
@@ -492,7 +669,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getState = exports.saveState = exports.group = exports.endGroup = exports.startGroup = exports.info = exports.warning = exports.error = exports.debug = exports.isDebug = exports.setFailed = exports.setCommandEcho = exports.setOutput = exports.getBooleanInput = exports.getMultilineInput = exports.getInput = exports.addPath = exports.setSecret = exports.exportVariable = exports.ExitCode = void 0;
+exports.getState = exports.saveState = exports.group = exports.endGroup = exports.startGroup = exports.info = exports.notice = exports.warning = exports.error = exports.debug = exports.isDebug = exports.setFailed = exports.setCommandEcho = exports.setOutput = exports.getBooleanInput = exports.getMultilineInput = exports.getInput = exports.addPath = exports.setSecret = exports.exportVariable = exports.ExitCode = void 0;
 const command_1 = __nccwpck_require__(7351);
 const file_command_1 = __nccwpck_require__(717);
 const utils_1 = __nccwpck_require__(5278);
@@ -670,19 +847,30 @@ exports.debug = debug;
 /**
  * Adds an error issue
  * @param message error issue message. Errors will be converted to string via toString()
+ * @param properties optional properties to add to the annotation.
  */
-function error(message) {
-    command_1.issue('error', message instanceof Error ? message.toString() : message);
+function error(message, properties = {}) {
+    command_1.issueCommand('error', utils_1.toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 exports.error = error;
 /**
- * Adds an warning issue
+ * Adds a warning issue
  * @param message warning issue message. Errors will be converted to string via toString()
+ * @param properties optional properties to add to the annotation.
  */
-function warning(message) {
-    command_1.issue('warning', message instanceof Error ? message.toString() : message);
+function warning(message, properties = {}) {
+    command_1.issueCommand('warning', utils_1.toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 exports.warning = warning;
+/**
+ * Adds a notice issue
+ * @param message notice issue message. Errors will be converted to string via toString()
+ * @param properties optional properties to add to the annotation.
+ */
+function notice(message, properties = {}) {
+    command_1.issueCommand('notice', utils_1.toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+}
+exports.notice = notice;
 /**
  * Writes info to log with console.log.
  * @param message info message
@@ -816,7 +1004,7 @@ exports.issueCommand = issueCommand;
 // We use any as a valid input type
 /* eslint-disable @typescript-eslint/no-explicit-any */
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.toCommandValue = void 0;
+exports.toCommandProperties = exports.toCommandValue = void 0;
 /**
  * Sanitizes an input into a string so it can be passed into issueCommand safely
  * @param input input to sanitize into a string
@@ -831,6 +1019,25 @@ function toCommandValue(input) {
     return JSON.stringify(input);
 }
 exports.toCommandValue = toCommandValue;
+/**
+ *
+ * @param annotationProperties
+ * @returns The command properties to send with the actual annotation command
+ * See IssueCommandProperties: https://github.com/actions/runner/blob/main/src/Runner.Worker/ActionCommandManager.cs#L646
+ */
+function toCommandProperties(annotationProperties) {
+    if (!Object.keys(annotationProperties).length) {
+        return {};
+    }
+    return {
+        title: annotationProperties.title,
+        line: annotationProperties.startLine,
+        endLine: annotationProperties.endLine,
+        col: annotationProperties.startColumn,
+        endColumn: annotationProperties.endColumn
+    };
+}
+exports.toCommandProperties = toCommandProperties;
 //# sourceMappingURL=utils.js.map
 
 /***/ }),

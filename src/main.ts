@@ -1,6 +1,8 @@
 import * as core from '@actions/core'
 import * as exec from '@actions/exec'
 import {ExecOptions} from '@actions/exec/lib/interfaces'
+import * as io from '@actions/io'
+import * as cp from 'child_process'
 import * as tc from '@actions/tool-cache'
 import * as fs from 'fs'
 import * as fetch from 'node-fetch'
@@ -12,24 +14,53 @@ export const EDGEDB_PKG_ROOT = 'https://packages.edgedb.com'
 const EDGEDB_PKG_IDX = `${EDGEDB_PKG_ROOT}/archive/.jsonindexes`
 
 export async function run(): Promise<void> {
+  const cliVersion = core.getInput('cli-version')
+
+  let serverVersion: string | null = core.getInput('server-version')
+  if (serverVersion === '' || serverVersion === 'none') {
+    serverVersion = null
+  }
+
+  let serverDsn: string | null = core.getInput('server-dsn')
+  if (serverDsn === '' || serverDsn === 'false' || serverDsn === 'nonw') {
+    serverDsn = null
+  }
+
+  let instanceName: string | null = core.getInput('instance-name')
+  if (instanceName === '') {
+    instanceName = null
+  }
+
   try {
-    const cliVersion = core.getInput('cli-version')
     const cliPath = await installCLI(cliVersion)
 
-    const serverVersion = core.getInput('server-version')
-    if (serverVersion !== 'none') {
+    if (serverDsn) {
+      core.addPath(cliPath)
+      await linkInstance(serverDsn, instanceName)
+    } else if (serverVersion) {
       const serverPath = await installServer(serverVersion, cliPath)
       core.addPath(serverPath)
-    }
 
-    core.addPath(cliPath)
+      core.addPath(cliPath)
+
+      const runstateDir = generateRunstateDir()
+      if (isRunningInsideProject()) {
+        await initProject(instanceName, serverVersion, runstateDir)
+        core.setOutput('runstate-dir', runstateDir)
+      } else if (instanceName) {
+        await createNamedInstance(instanceName, serverVersion, runstateDir)
+        core.setOutput('runstate-dir', runstateDir)
+      }
+    } else {
+      core.addPath(cliPath)
+    }
   } catch (error) {
-    core.setFailed(error.message)
+    core.setFailed((error as Error).message)
   }
 }
 
 async function installServer(
-  requestedVersion: string,
+  requestedVersion: string | null,
   cliPath: string
 ): Promise<string> {
   const options: ExecOptions = {
@@ -44,16 +75,12 @@ async function installServer(
     }
   }
 
-  const cmdline = ['--method', 'package']
+  const cmdline = []
   const cli = path.join(cliPath, 'edgedb')
 
   if (requestedVersion === 'nightly') {
     cmdline.push('--nightly')
-  } else if (
-    requestedVersion !== undefined &&
-    requestedVersion !== '' &&
-    requestedVersion !== 'stable'
-  ) {
+  } else if (requestedVersion && requestedVersion !== 'stable') {
     cmdline.push('--version')
     cmdline.push(requestedVersion)
   }
@@ -74,6 +101,10 @@ async function installServer(
         core.debug(data.toString().trim())
       }
     }
+  }
+
+  if (cmdline.length === 0) {
+    cmdline.push('--latest')
   }
 
   const infoCmdline = ['server', 'info', '--bin-path'].concat(cmdline)
@@ -187,4 +218,180 @@ export function getBaseDist(arch: string, platform: string): string {
   }
 
   return `${distPlatform}-${distArch}`
+}
+
+async function linkInstance(
+  dsn: string,
+  instanceName: string | null
+): Promise<void> {
+  instanceName = instanceName || generateInstanceName()
+
+  const cli = 'edgedb'
+  const options: ExecOptions = {
+    silent: true,
+    listeners: {
+      stdout: (data: Buffer) => {
+        core.debug(data.toString().trim())
+      },
+      stderr: (data: Buffer) => {
+        core.debug(data.toString().trim())
+      }
+    }
+  }
+
+  const instanceLinkCmdLine = [
+    'instance',
+    'link',
+    '--non-interactive',
+    '--trust-tls-cert',
+    '--dsn',
+    dsn,
+    instanceName
+  ]
+  core.debug(`Running ${cli} ${instanceLinkCmdLine.join(' ')}`)
+  await exec.exec(cli, instanceLinkCmdLine, options)
+
+  if (isRunningInsideProject()) {
+    const projectLinkCmdLine = [
+      'project',
+      'init',
+      '--non-interactive',
+      '--link',
+      '--server-instance',
+      instanceName
+    ]
+    core.debug(`Running ${cli} ${projectLinkCmdLine.join(' ')}`)
+    await exec.exec(cli, projectLinkCmdLine, options)
+  }
+}
+
+async function initProject(
+  instanceName: string | null,
+  serverVersion: string,
+  runstateDir: string
+): Promise<void> {
+  instanceName = instanceName || generateInstanceName()
+
+  const cli = 'edgedb'
+  const options: ExecOptions = {
+    silent: true,
+    env: {
+      XDG_RUNTIME_DIR: runstateDir
+    },
+    listeners: {
+      stdout: (data: Buffer) => {
+        core.debug(data.toString().trim())
+      },
+      stderr: (data: Buffer) => {
+        core.debug(data.toString().trim())
+      }
+    }
+  }
+
+  const cmdOptionsLine = [
+    '--non-interactive',
+    '--server-start-conf',
+    'manual',
+    '--server-instance',
+    instanceName
+  ]
+  if (serverVersion && serverVersion !== 'stable') {
+    cmdOptionsLine.push('--server-version', serverVersion)
+  }
+
+  const cmdLine = ['project', 'init'].concat(cmdOptionsLine)
+  core.debug(`Running ${cli} ${cmdLine.join(' ')}`)
+  await exec.exec(cli, cmdLine, options)
+
+  await startInstance(instanceName, runstateDir)
+}
+
+async function createNamedInstance(
+  instanceName: string,
+  serverVersion: string,
+  runstateDir: string
+): Promise<void> {
+  const cli = 'edgedb'
+
+  const options: ExecOptions = {
+    silent: true,
+    env: {
+      XDG_RUNTIME_DIR: runstateDir
+    },
+    listeners: {
+      stdout: (data: Buffer) => {
+        core.debug(data.toString().trim())
+      },
+      stderr: (data: Buffer) => {
+        core.debug(data.toString().trim())
+      }
+    }
+  }
+
+  const cmdOptionsLine = ['--start-conf', 'manual']
+  if (serverVersion === 'nightly') {
+    cmdOptionsLine.push('--nightly')
+  } else if (serverVersion && serverVersion !== 'stable') {
+    cmdOptionsLine.push('--version', serverVersion)
+  }
+
+  const cmdLine = ['instance', 'create', instanceName].concat(cmdOptionsLine)
+  core.debug(`Running ${cli} ${cmdLine.join(' ')}`)
+  await exec.exec(cli, cmdLine, options)
+
+  await startInstance(instanceName, runstateDir)
+}
+
+async function startInstance(
+  instanceName: string,
+  runstateDir: string
+): Promise<void> {
+  const cli = 'edgedb'
+
+  const options: ExecOptions = {
+    env: {
+      XDG_RUNTIME_DIR: runstateDir
+    }
+  }
+
+  const cmdLine = ['instance', 'start', '--foreground', instanceName]
+  core.debug(`Running ${cli} ${cmdLine.join(' ')} in background`)
+  await backgroundExec(cli, cmdLine, options)
+}
+
+function isRunningInsideProject(): boolean {
+  try {
+    fs.accessSync('edgedb.toml')
+    return true
+  } catch (error) {
+    return false
+  }
+}
+
+function generateInstanceName(): string {
+  const start = 1000
+  const end = 9999
+  const suffix = Math.floor(Math.random() * (end - start) + start)
+  return `ghactions_${suffix}`
+}
+
+function generateRunstateDir(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'edgedb-server-'))
+}
+
+async function backgroundExec(
+  command: string,
+  args: string[],
+  options: ExecOptions
+): Promise<void> {
+  command = await io.which(command, true)
+
+  const spawnOptions: cp.SpawnOptions = {
+    stdio: 'ignore',
+    detached: true,
+    env: options.env
+  }
+
+  const serverProcess = cp.spawn(command, args, spawnOptions)
+  serverProcess.unref()
 }
