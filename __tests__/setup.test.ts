@@ -43,7 +43,7 @@ describe('setup-edgedb', () => {
     console.log('::stop-commands::stoptoken')
     process.env['GITHUB_PATH'] = ''
     inputs = {
-      'project-link': false
+      'server-dsn': false
     }
     inSpy = jest.spyOn(core, 'getInput')
     inSpy.mockImplementation(name => inputs[name] || '')

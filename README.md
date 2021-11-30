@@ -89,7 +89,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: edgedb/setup-edgedb@v1
         with:
-          project-link: edgedb://localhost:5656
+          server-dsn: edgedb://localhost:5656
           instance-name: ci_edgedb_instance  # optional
       - run: edgedb query "SELECT 'Hello from GitHub Actions'"
 ```

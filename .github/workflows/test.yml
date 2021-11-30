@@ -79,7 +79,7 @@ jobs:
           echo -e '[edgedb]\nserver-version = "1.0-rc.2"' >> edgedb.toml
       - uses: ./
         with:
-          project-link: edgedb://localhost:5656
+          server-dsn: edgedb://localhost:5656
           cli-version: ${{ matrix.cli-version }}
           server-version: none
       - name: Verify installation

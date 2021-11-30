@@ -55,9 +55,9 @@ function run() {
         if (serverVersion === '' || serverVersion === 'none') {
             serverVersion = null;
         }
-        let projectLink = core.getInput('project-link');
-        if (projectLink === '' || projectLink === 'false') {
-            projectLink = null;
+        let serverDsn = core.getInput('server-dsn');
+        if (serverDsn === '' || serverDsn === 'false' || serverDsn === 'nonw') {
+            serverDsn = null;
         }
         let instanceName = core.getInput('instance-name');
         if (instanceName === '') {
@@ -65,12 +65,11 @@ function run() {
         }
         try {
             const cliPath = yield installCLI(cliVersion);
-            if (projectLink) {
+            if (serverDsn) {
                 core.addPath(cliPath);
-                yield linkProject(projectLink, instanceName);
-                return;
+                yield linkInstance(serverDsn, instanceName);
             }
-            if (serverVersion) {
+            else if (serverVersion) {
                 const serverPath = yield installServer(serverVersion, cliPath);
                 core.addPath(serverPath);
                 core.addPath(cliPath);
@@ -225,9 +224,9 @@ function getBaseDist(arch, platform) {
     return `${distPlatform}-${distArch}`;
 }
 exports.getBaseDist = getBaseDist;
-function linkProject(dsn, instanceName) {
+function linkInstance(dsn, instanceName) {
     return __awaiter(this, void 0, void 0, function* () {
-        instanceName = instanceName || generateIntanceName();
+        instanceName = instanceName || generateInstanceName();
         const cli = 'edgedb';
         const options = {
             silent: true,
@@ -251,21 +250,23 @@ function linkProject(dsn, instanceName) {
         ];
         core.debug(`Running ${cli} ${instanceLinkCmdLine.join(' ')}`);
         yield exec.exec(cli, instanceLinkCmdLine, options);
-        const projectLinkCmdLine = [
-            'project',
-            'init',
-            '--non-interactive',
-            '--link',
-            '--server-instance',
-            instanceName
-        ];
-        core.debug(`Running ${cli} ${projectLinkCmdLine.join(' ')}`);
-        yield exec.exec(cli, projectLinkCmdLine, options);
+        if (isRunningInsideProject()) {
+            const projectLinkCmdLine = [
+                'project',
+                'init',
+                '--non-interactive',
+                '--link',
+                '--server-instance',
+                instanceName
+            ];
+            core.debug(`Running ${cli} ${projectLinkCmdLine.join(' ')}`);
+            yield exec.exec(cli, projectLinkCmdLine, options);
+        }
     });
 }
 function initProject(instanceName, serverVersion, runstateDir) {
     return __awaiter(this, void 0, void 0, function* () {
-        instanceName = instanceName || generateIntanceName();
+        instanceName = instanceName || generateInstanceName();
         const cli = 'edgedb';
         const options = {
             silent: true,
@@ -349,7 +350,7 @@ function isRunningInsideProject() {
         return false;
     }
 }
-function generateIntanceName() {
+function generateInstanceName() {
     const start = 1000;
     const end = 9999;
     const suffix = Math.floor(Math.random() * (end - start) + start);

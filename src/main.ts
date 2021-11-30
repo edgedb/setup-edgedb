@@ -21,9 +21,9 @@ export async function run(): Promise<void> {
     serverVersion = null
   }
 
-  let projectLink: string | null = core.getInput('project-link')
-  if (projectLink === '' || projectLink === 'false') {
-    projectLink = null
+  let serverDsn: string | null = core.getInput('server-dsn')
+  if (serverDsn === '' || serverDsn === 'false' || serverDsn === 'nonw') {
+    serverDsn = null
   }
 
   let instanceName: string | null = core.getInput('instance-name')
@@ -34,15 +34,10 @@ export async function run(): Promise<void> {
   try {
     const cliPath = await installCLI(cliVersion)
 
-    if (projectLink) {
+    if (serverDsn) {
       core.addPath(cliPath)
-
-      await linkProject(projectLink, instanceName)
-
-      return
-    }
-
-    if (serverVersion) {
+      await linkInstance(serverDsn, instanceName)
+    } else if (serverVersion) {
       const serverPath = await installServer(serverVersion, cliPath)
       core.addPath(serverPath)
 
@@ -60,7 +55,7 @@ export async function run(): Promise<void> {
       core.addPath(cliPath)
     }
   } catch (error) {
-    core.setFailed(error.message)
+    core.setFailed((error as Error).message)
   }
 }
 
@@ -225,11 +220,11 @@ export function getBaseDist(arch: string, platform: string): string {
   return `${distPlatform}-${distArch}`
 }
 
-async function linkProject(
+async function linkInstance(
   dsn: string,
   instanceName: string | null
 ): Promise<void> {
-  instanceName = instanceName || generateIntanceName()
+  instanceName = instanceName || generateInstanceName()
 
   const cli = 'edgedb'
   const options: ExecOptions = {
@@ -256,16 +251,18 @@ async function linkProject(
   core.debug(`Running ${cli} ${instanceLinkCmdLine.join(' ')}`)
   await exec.exec(cli, instanceLinkCmdLine, options)
 
-  const projectLinkCmdLine = [
-    'project',
-    'init',
-    '--non-interactive',
-    '--link',
-    '--server-instance',
-    instanceName
-  ]
-  core.debug(`Running ${cli} ${projectLinkCmdLine.join(' ')}`)
-  await exec.exec(cli, projectLinkCmdLine, options)
+  if (isRunningInsideProject()) {
+    const projectLinkCmdLine = [
+      'project',
+      'init',
+      '--non-interactive',
+      '--link',
+      '--server-instance',
+      instanceName
+    ]
+    core.debug(`Running ${cli} ${projectLinkCmdLine.join(' ')}`)
+    await exec.exec(cli, projectLinkCmdLine, options)
+  }
 }
 
 async function initProject(
@@ -273,7 +270,7 @@ async function initProject(
   serverVersion: string,
   runstateDir: string
 ): Promise<void> {
-  instanceName = instanceName || generateIntanceName()
+  instanceName = instanceName || generateInstanceName()
 
   const cli = 'edgedb'
   const options: ExecOptions = {
@@ -371,7 +368,7 @@ function isRunningInsideProject(): boolean {
   }
 }
 
-function generateIntanceName(): string {
+function generateInstanceName(): string {
   const start = 1000
   const end = 9999
   const suffix = Math.floor(Math.random() * (end - start) + start)
