@@ -8,7 +8,7 @@ export async function run(): Promise<void> {
     await installCLI()
     await installServer()
   } catch (error) {
-    core.setFailed(error.message)
+    core.setFailed((error as Error).message)
   }
 }
 
@@ -73,7 +73,7 @@ async function installCLI(): Promise<void> {
 async function installServer(): Promise<void> {
   const requestedVersion = core.getInput('server-version')
 
-  const args = ['edgedb', 'server', 'install', '--method', 'package']
+  const args = []
 
   if (requestedVersion === 'nightly') {
     args.push('--nightly')
@@ -82,8 +82,15 @@ async function installServer(): Promise<void> {
     args.push(requestedVersion)
   }
 
-  await checkOutput('wsl', args)
-  const bin = await checkOutput('wsl ls /usr/bin/edgedb-server-*')
+  await checkOutput('wsl', ['edgedb', 'server', 'install'].concat(args))
+
+  if (args.length === 0) {
+    args.push('--latest')
+  }
+  const bin = await checkOutput(
+    'wsl',
+    ['edgedb', 'server', 'info', '--bin-path'].concat(args)
+  )
 
   if (bin === '') {
     throw Error('could not find edgedb-server bin')
