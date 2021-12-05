@@ -22,7 +22,7 @@ export async function run(): Promise<void> {
   }
 
   let serverDsn: string | null = core.getInput('server-dsn')
-  if (serverDsn === '' || serverDsn === 'false' || serverDsn === 'nonw') {
+  if (serverDsn === '' || serverDsn === 'false' || serverDsn === 'none') {
     serverDsn = null
   }
 
@@ -117,9 +117,14 @@ async function installServer(
 
 async function installCLI(requestedCliVersion: string): Promise<string> {
   const arch = os.arch()
+  const platform = os.platform()
   const includeCliPrereleases = true
   let cliVersionRange = '*'
-  let dist = getBaseDist(arch, os.platform())
+  let libc = ''
+  if (platform === 'linux') {
+    libc = 'musl'
+  }
+  let dist = getBaseDist(arch, platform, libc)
 
   if (requestedCliVersion === 'nightly') {
     dist += '.nightly'
@@ -199,14 +204,17 @@ export async function getVersionMap(dist: string): Promise<Map<string, any>> {
   return versionMap
 }
 
-export function getBaseDist(arch: string, platform: string): string {
+export function getBaseDist(arch: string, platform: string, libc = ''): string {
   let distArch = ''
   let distPlatform = ''
 
   if (platform === 'linux') {
-    distPlatform = platform
+    if (libc === '') {
+      libc = 'gnu'
+    }
+    distPlatform = `unknown-linux-${libc}`
   } else if (platform === 'darwin') {
-    distPlatform = 'macos'
+    distPlatform = 'apple-darwin'
   } else {
     throw Error(`This action cannot be run on ${platform}`)
   }
@@ -217,7 +225,7 @@ export function getBaseDist(arch: string, platform: string): string {
     throw Error(`This action does not support the ${arch} architecture`)
   }
 
-  return `${distPlatform}-${distArch}`
+  return `${distArch}-${distPlatform}`
 }
 
 async function linkInstance(

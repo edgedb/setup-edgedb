@@ -83,14 +83,16 @@ describe('setup-edgedb', () => {
   })
 
   it('Installs CLI', async () => {
-    let versionSpec = '1.0.0-alpha.7'
-    let resolvedVersion = versionSpec
+    inputs['cli-version'] = '>=1.0.0-rc.1 <=1.0.0-rc.2'
 
-    inputs['cli-version'] = '>=1.0.0-alpha.5 <=1.0.0-alpha.7'
-
-    const baseDist = main.getBaseDist(os.arch(), os.platform())
+    let libc = ''
+    if (os.platform() == 'linux') {
+      libc = 'musl'
+    }
+    const baseDist = main.getBaseDist(os.arch(), os.platform(), libc)
     const pkgBase = `https://packages.edgedb.com/archive/${baseDist}`
-    const expectedUrl = pkgBase + '/edgedb-cli_1.0.0-alpha.7_2020121617'
+    const expectedVer = '1.0.0-rc.2\\+([0-9a-f]{7})'
+    const expectedUrl = `${pkgBase}/edgedb-cli-${expectedVer}`
 
     const tmpdir = fs.mkdtempSync('edgedb-setup')
     let tmp = path.join(tmpdir, 'foo')
@@ -101,7 +103,7 @@ describe('setup-edgedb', () => {
 
     findSpy.mockImplementation(() => '')
 
-    const cliPath = path.normalize('/cache/edgedb/1.0.0-alpha.7')
+    const cliPath = path.normalize('/cache/edgedb/1.0.0-rc.2')
     cacheSpy.mockImplementation(async () => cliPath)
 
     await main.run()
@@ -111,21 +113,27 @@ describe('setup-edgedb', () => {
 
     expect(dlSpy).toHaveBeenCalled()
     expect(logSpy).toHaveBeenCalledWith(
-      `Downloading edgedb-cli ${resolvedVersion} - ${os.arch} from ${expectedUrl}`
+      expect.stringMatching(
+        new RegExp(
+          `Downloading edgedb-cli ${expectedVer} - ${os.arch} from ${expectedUrl}`
+        )
+      )
     )
     expect(cnSpy).toHaveBeenCalledWith(`::add-path::${cliPath}${os.EOL}`)
   })
 
   it('Installs server', async () => {
-    let versionSpec = '1.0.0-alpha.7'
-    let resolvedVersion = versionSpec
-
-    inputs['cli-version'] = '>=1.0.0-alpha.5 <=1.0.0-alpha.7'
+    inputs['cli-version'] = '>=1.0.0-rc.1 <=1.0.0-rc.2'
     inputs['server-version'] = 'stable'
 
-    const baseDist = main.getBaseDist(os.arch(), os.platform())
+    let libc = ''
+    if (os.platform() == 'linux') {
+      libc = 'musl'
+    }
+    const baseDist = main.getBaseDist(os.arch(), os.platform(), libc)
     const pkgBase = `https://packages.edgedb.com/archive/${baseDist}`
-    const expectedUrl = pkgBase + '/edgedb-cli_1.0.0-alpha.7_2020121617'
+    const expectedVer = '1.0.0-rc.2\\+([0-9a-f]{7})'
+    const expectedUrl = `${pkgBase}/edgedb-cli-${expectedVer}`
 
     const tmpdir = fs.mkdtempSync('edgedb-setup')
     let tmp = path.join(tmpdir, 'foo')
@@ -153,7 +161,7 @@ describe('setup-edgedb', () => {
       }
     })
 
-    const cliPath = path.normalize('/cache/edgedb/1.0.0-alpha.7')
+    const cliPath = path.normalize('/cache/edgedb/1.0.0-rc.2')
     cacheSpy.mockImplementation(async () => cliPath)
     const serverPath = path.dirname(tmp)
 
@@ -164,7 +172,11 @@ describe('setup-edgedb', () => {
 
     expect(dlSpy).toHaveBeenCalled()
     expect(logSpy).toHaveBeenCalledWith(
-      `Downloading edgedb-cli ${resolvedVersion} - ${os.arch} from ${expectedUrl}`
+      expect.stringMatching(
+        new RegExp(
+          `Downloading edgedb-cli ${expectedVer} - ${os.arch} from ${expectedUrl}`
+        )
+      )
     )
     expect(cnSpy).toHaveBeenCalledWith(`::add-path::${serverPath}${os.EOL}`)
     expect(cnSpy).toHaveBeenCalledWith(`::add-path::${cliPath}${os.EOL}`)

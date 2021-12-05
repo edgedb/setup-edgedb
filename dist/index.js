@@ -56,7 +56,7 @@ function run() {
             serverVersion = null;
         }
         let serverDsn = core.getInput('server-dsn');
-        if (serverDsn === '' || serverDsn === 'false' || serverDsn === 'nonw') {
+        if (serverDsn === '' || serverDsn === 'false' || serverDsn === 'none') {
             serverDsn = null;
         }
         let instanceName = core.getInput('instance-name');
@@ -143,9 +143,14 @@ function installServer(requestedVersion, cliPath) {
 function installCLI(requestedCliVersion) {
     return __awaiter(this, void 0, void 0, function* () {
         const arch = os.arch();
+        const platform = os.platform();
         const includeCliPrereleases = true;
         let cliVersionRange = '*';
-        let dist = getBaseDist(arch, os.platform());
+        let libc = '';
+        if (platform === 'linux') {
+            libc = 'musl';
+        }
+        let dist = getBaseDist(arch, platform, libc);
         if (requestedCliVersion === 'nightly') {
             dist += '.nightly';
         }
@@ -203,14 +208,17 @@ function getVersionMap(dist) {
     });
 }
 exports.getVersionMap = getVersionMap;
-function getBaseDist(arch, platform) {
+function getBaseDist(arch, platform, libc = '') {
     let distArch = '';
     let distPlatform = '';
     if (platform === 'linux') {
-        distPlatform = platform;
+        if (libc === '') {
+            libc = 'gnu';
+        }
+        distPlatform = `unknown-linux-${libc}`;
     }
     else if (platform === 'darwin') {
-        distPlatform = 'macos';
+        distPlatform = 'apple-darwin';
     }
     else {
         throw Error(`This action cannot be run on ${platform}`);
@@ -221,7 +229,7 @@ function getBaseDist(arch, platform) {
     else {
         throw Error(`This action does not support the ${arch} architecture`);
     }
-    return `${distPlatform}-${distArch}`;
+    return `${distArch}-${distPlatform}`;
 }
 exports.getBaseDist = getBaseDist;
 function linkInstance(dsn, instanceName) {
@@ -516,7 +524,7 @@ function installCLI() {
 function installServer() {
     return __awaiter(this, void 0, void 0, function* () {
         const requestedVersion = core.getInput('server-version');
-        const args = ['edgedb', 'server', 'install', '--method', 'package'];
+        const args = [];
         if (requestedVersion === 'nightly') {
             args.push('--nightly');
         }
@@ -524,8 +532,11 @@ function installServer() {
             args.push('--version');
             args.push(requestedVersion);
         }
-        yield checkOutput('wsl', args);
-        const bin = yield checkOutput('wsl ls /usr/bin/edgedb-server-*');
+        yield checkOutput('wsl', ['edgedb', 'server', 'install'].concat(args));
+        if (args.length === 0) {
+            args.push('--latest');
+        }
+        const bin = yield checkOutput('wsl', ['edgedb', 'server', 'info', '--bin-path'].concat(args));
         if (bin === '') {
             throw Error('could not find edgedb-server bin');
         }
