@@ -2,6 +2,7 @@ import * as main from './main'
 import * as core from '@actions/core'
 import * as exec from '@actions/exec'
 import * as os from 'os'
+import * as path from 'path'
 
 export async function run(): Promise<void> {
   try {
@@ -31,7 +32,7 @@ async function getBaseDist(): Promise<string> {
   const arch = os.arch()
   const platform = (await checkOutput('wsl uname')).toLocaleLowerCase()
 
-  return main.getBaseDist(arch, platform)
+  return main.getBaseDist(arch, platform, 'musl')
 }
 
 async function installCLI(): Promise<void> {
@@ -87,14 +88,25 @@ async function installServer(): Promise<void> {
   if (args.length === 0) {
     args.push('--latest')
   }
-  const bin = await checkOutput(
-    'wsl',
-    ['edgedb', 'server', 'info', '--bin-path'].concat(args)
-  )
+  const bin = (
+    await checkOutput(
+      'wsl',
+      ['edgedb', 'server', 'info', '--bin-path'].concat(args)
+    )
+  ).trim()
 
   if (bin === '') {
     throw Error('could not find edgedb-server bin')
   }
 
-  await checkOutput('wsl', ['ln', '-s', bin.trim(), '/usr/bin/edgedb-server'])
+  const instDir = path.dirname(path.dirname(bin))
+
+  await checkOutput('wsl', ['cp', '-a', instDir, '/opt/edgedb'])
+
+  await checkOutput('wsl', [
+    'ln',
+    '-s',
+    '/opt/edgedb/bin/edgedb-server',
+    '/usr/bin/edgedb-server'
+  ])
 }

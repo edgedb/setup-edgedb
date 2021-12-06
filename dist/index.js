@@ -460,6 +460,7 @@ const main = __importStar(__nccwpck_require__(3109));
 const core = __importStar(__nccwpck_require__(2186));
 const exec = __importStar(__nccwpck_require__(1514));
 const os = __importStar(__nccwpck_require__(2087));
+const path = __importStar(__nccwpck_require__(5622));
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -490,7 +491,7 @@ function getBaseDist() {
     return __awaiter(this, void 0, void 0, function* () {
         const arch = os.arch();
         const platform = (yield checkOutput('wsl uname')).toLocaleLowerCase();
-        return main.getBaseDist(arch, platform);
+        return main.getBaseDist(arch, platform, 'musl');
     });
 }
 function installCLI() {
@@ -536,11 +537,13 @@ function installServer() {
         if (args.length === 0) {
             args.push('--latest');
         }
-        const bin = yield checkOutput('wsl', ['edgedb', 'server', 'info', '--bin-path'].concat(args));
+        const bin = (yield checkOutput('wsl', ['edgedb', 'server', 'info', '--bin-path'].concat(args))).trim();
         if (bin === '') {
             throw Error('could not find edgedb-server bin');
         }
-        yield checkOutput('wsl', ['ln', '-s', bin.trim(), '/usr/bin/edgedb-server']);
+        const instDir = path.dirname(path.dirname(bin));
+        yield checkOutput('wsl', ['cp', '-a', instDir, '/opt/edgedb']);
+        yield checkOutput('wsl', ['ln', '-s', '/opt/edgedb/bin/edgedb-server', '/usr/bin/edgedb-server']);
     });
 }
 
