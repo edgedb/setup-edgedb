@@ -63,19 +63,23 @@ function run() {
         if (instanceName === '') {
             instanceName = null;
         }
+        let projectDir = core.getInput('project-dir');
+        if (projectDir === '') {
+            projectDir = null;
+        }
         try {
             const cliPath = yield installCLI(cliVersion);
             if (serverDsn) {
                 core.addPath(cliPath);
-                yield linkInstance(serverDsn, instanceName);
+                yield linkInstance(serverDsn, instanceName, projectDir);
             }
             else if (serverVersion) {
                 const serverPath = yield installServer(serverVersion, cliPath);
                 core.addPath(serverPath);
                 core.addPath(cliPath);
                 const runstateDir = generateRunstateDir();
-                if (isRunningInsideProject()) {
-                    yield initProject(instanceName, serverVersion, runstateDir);
+                if (hasProjectFile(projectDir)) {
+                    yield initProject(projectDir, instanceName, serverVersion, runstateDir);
                     core.setOutput('runstate-dir', runstateDir);
                 }
                 else if (instanceName) {
@@ -232,7 +236,7 @@ function getBaseDist(arch, platform, libc = '') {
     return `${distArch}-${distPlatform}`;
 }
 exports.getBaseDist = getBaseDist;
-function linkInstance(dsn, instanceName) {
+function linkInstance(dsn, instanceName, projectDir) {
     return __awaiter(this, void 0, void 0, function* () {
         instanceName = instanceName || generateInstanceName();
         const cli = 'edgedb';
@@ -258,7 +262,7 @@ function linkInstance(dsn, instanceName) {
         ];
         core.debug(`Running ${cli} ${instanceLinkCmdLine.join(' ')}`);
         yield exec.exec(cli, instanceLinkCmdLine, options);
-        if (isRunningInsideProject()) {
+        if (hasProjectFile(projectDir)) {
             const projectLinkCmdLine = [
                 'project',
                 'init',
@@ -267,12 +271,15 @@ function linkInstance(dsn, instanceName) {
                 '--server-instance',
                 instanceName
             ];
+            if (projectDir) {
+                projectLinkCmdLine.push('--project-dir', projectDir);
+            }
             core.debug(`Running ${cli} ${projectLinkCmdLine.join(' ')}`);
             yield exec.exec(cli, projectLinkCmdLine, options);
         }
     });
 }
-function initProject(instanceName, serverVersion, runstateDir) {
+function initProject(projectDir, instanceName, serverVersion, runstateDir) {
     return __awaiter(this, void 0, void 0, function* () {
         instanceName = instanceName || generateInstanceName();
         const cli = 'edgedb';
@@ -299,6 +306,9 @@ function initProject(instanceName, serverVersion, runstateDir) {
         ];
         if (serverVersion && serverVersion !== 'stable') {
             cmdOptionsLine.push('--server-version', serverVersion);
+        }
+        if (projectDir) {
+            cmdOptionsLine.push('--project-dir', projectDir);
         }
         const cmdLine = ['project', 'init'].concat(cmdOptionsLine);
         core.debug(`Running ${cli} ${cmdLine.join(' ')}`);
@@ -349,9 +359,10 @@ function startInstance(instanceName, runstateDir) {
         yield backgroundExec(cli, cmdLine, options);
     });
 }
-function isRunningInsideProject() {
+function hasProjectFile(projectDir) {
+    const manifestPath = path.join(projectDir || '', 'edgedb.toml');
     try {
-        fs.accessSync('edgedb.toml');
+        fs.accessSync(manifestPath);
         return true;
     }
     catch (error) {
@@ -543,7 +554,12 @@ function installServer() {
         }
         const instDir = path.dirname(path.dirname(bin));
         yield checkOutput('wsl', ['cp', '-a', instDir, '/opt/edgedb']);
-        yield checkOutput('wsl', ['ln', '-s', '/opt/edgedb/bin/edgedb-server', '/usr/bin/edgedb-server']);
+        yield checkOutput('wsl', [
+            'ln',
+            '-s',
+            '/opt/edgedb/bin/edgedb-server',
+            '/usr/bin/edgedb-server'
+        ]);
     });
 }
 
