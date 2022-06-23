@@ -91,7 +91,7 @@ jobs:
         with:
           server-dsn: edgedb://localhost:5656
           instance-name: ci_edgedb_instance  # optional
-      - run: edgedb query "SELECT 'Hello from GitHub Actions'"
+      - run: edgedb project init --link --server-instance ci_edgedb_instance
 ```
 
 Example (creates new instance, but overrides `server-version` from `edgedb.toml` if project initialization is to be used)
