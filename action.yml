@@ -32,6 +32,11 @@ inputs:
       of initializing a new local instance.  By default, a new instance will be
       initialized.
     default: 'false'
+  project-dir:
+    required: false
+    description: >
+      If set, specifies the directory with edgedb.toml project manifest.
+    default: ''
 runs:
   using: 'node12'
   main: 'dist/index.js'

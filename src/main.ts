@@ -31,12 +31,17 @@ export async function run(): Promise<void> {
     instanceName = null
   }
 
+  let projectDir: string | null = core.getInput('project-dir')
+  if (projectDir === '') {
+    projectDir = null
+  }
+
   try {
     const cliPath = await installCLI(cliVersion)
 
     if (serverDsn) {
       core.addPath(cliPath)
-      await linkInstance(serverDsn, instanceName)
+      await linkInstance(serverDsn, instanceName, projectDir)
     } else if (serverVersion) {
       const serverPath = await installServer(serverVersion, cliPath)
       core.addPath(serverPath)
@@ -44,8 +49,8 @@ export async function run(): Promise<void> {
       core.addPath(cliPath)
 
       const runstateDir = generateRunstateDir()
-      if (isRunningInsideProject()) {
-        await initProject(instanceName, serverVersion, runstateDir)
+      if (hasProjectFile(projectDir)) {
+        await initProject(projectDir, instanceName, serverVersion, runstateDir)
         core.setOutput('runstate-dir', runstateDir)
       } else if (instanceName) {
         await createNamedInstance(instanceName, serverVersion, runstateDir)
@@ -230,7 +235,8 @@ export function getBaseDist(arch: string, platform: string, libc = ''): string {
 
 async function linkInstance(
   dsn: string,
-  instanceName: string | null
+  instanceName: string | null,
+  projectDir: string | null
 ): Promise<void> {
   instanceName = instanceName || generateInstanceName()
 
@@ -259,7 +265,7 @@ async function linkInstance(
   core.debug(`Running ${cli} ${instanceLinkCmdLine.join(' ')}`)
   await exec.exec(cli, instanceLinkCmdLine, options)
 
-  if (isRunningInsideProject()) {
+  if (hasProjectFile(projectDir)) {
     const projectLinkCmdLine = [
       'project',
       'init',
@@ -268,12 +274,18 @@ async function linkInstance(
       '--server-instance',
       instanceName
     ]
+
+    if (projectDir) {
+      projectLinkCmdLine.push('--project-dir', projectDir)
+    }
+
     core.debug(`Running ${cli} ${projectLinkCmdLine.join(' ')}`)
     await exec.exec(cli, projectLinkCmdLine, options)
   }
 }
 
 async function initProject(
+  projectDir: string | null,
   instanceName: string | null,
   serverVersion: string,
   runstateDir: string
@@ -305,6 +317,9 @@ async function initProject(
   ]
   if (serverVersion && serverVersion !== 'stable') {
     cmdOptionsLine.push('--server-version', serverVersion)
+  }
+  if (projectDir) {
+    cmdOptionsLine.push('--project-dir', projectDir)
   }
 
   const cmdLine = ['project', 'init'].concat(cmdOptionsLine)
@@ -367,9 +382,11 @@ async function startInstance(
   await backgroundExec(cli, cmdLine, options)
 }
 
-function isRunningInsideProject(): boolean {
+function hasProjectFile(projectDir: string | null): boolean {
+  const manifestPath = path.join(projectDir || '', 'edgedb.toml')
+
   try {
-    fs.accessSync('edgedb.toml')
+    fs.accessSync(manifestPath)
     return true
   } catch (error) {
     return false
