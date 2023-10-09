@@ -1,79 +1,64 @@
-import * as main from '../src/main'
-import * as core from '@actions/core'
-import * as exec from '@actions/exec'
-import {ExecOptions} from '@actions/exec/lib/interfaces'
-import * as io from '@actions/io'
-import * as tc from '@actions/tool-cache'
+import type * as coreType from '@actions/core'
+import type * as execType from '@actions/exec'
+import type * as tcType from '@actions/tool-cache'
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  jest
+} from '@jest/globals'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import * as process from 'process'
+import url from 'url'
+import type * as mainType from '../src/main'
+import {SpiedModule, spyOnModule} from './spy-on-module'
 
-const toolDir = path.join(
-  __dirname,
-  'runner',
-  path.join(Math.random().toString(36).substring(7)),
-  'tools'
-)
 const tempDir = path.join(
-  __dirname,
+  path.dirname(url.fileURLToPath(import.meta.url)),
   'runner',
-  path.join(Math.random().toString(36).substring(7)),
-  'temp'
+  Math.random().toString(36).substring(7)
 )
-
-process.env['RUNNER_TOOL_CACHE'] = toolDir
-process.env['RUNNER_TEMP'] = tempDir
+process.env.RUNNER_TOOL_CACHE = path.join(tempDir, 'tools')
+process.env.RUNNER_TEMP = path.join(tempDir, 'temp')
 
 describe('setup-edgedb', () => {
-  let inputs = {} as any
-  let inSpy: jest.SpyInstance
-  let inBooleanSpy: jest.SpyInstance
-  let cnSpy: jest.SpyInstance
-  let logSpy: jest.SpyInstance
-  let dbgSpy: jest.SpyInstance
-  let warningSpy: jest.SpyInstance
-  let dlSpy: jest.SpyInstance
-  let findSpy: jest.SpyInstance
-  let cacheSpy: jest.SpyInstance
-  let execSpy: jest.SpyInstance
+  let inputs: Record<string, string | boolean> = {}
+  let core: SpiedModule<typeof coreType>
+  let exec: SpiedModule<typeof execType>
+  let tc: SpiedModule<typeof tcType>
+  let main: typeof mainType
 
-  beforeEach(() => {
-    // @actions/core
+  beforeAll(async () => {
+    core = await spyOnModule<typeof coreType>('@actions/core')
+    tc = await spyOnModule<typeof tcType>('@actions/tool-cache')
+    exec = await spyOnModule<typeof execType>('@actions/exec')
+    // After mocks have been set up
+    main = await import('../src/main')
+  })
+
+  beforeEach(async () => {
+    // eslint-disable-next-line no-console
     console.log('::stop-commands::stoptoken')
     process.env['GITHUB_PATH'] = ''
     inputs = {
       'server-dsn': false
     }
-    inSpy = jest.spyOn(core, 'getInput')
-    inSpy.mockImplementation(name => inputs[name] || '')
-    inBooleanSpy = jest.spyOn(core, 'getBooleanInput')
-    inBooleanSpy.mockImplementation(name => inputs[name])
 
-    // @actions/tool-cache
-    dlSpy = jest.spyOn(tc, 'downloadTool')
-    findSpy = jest.spyOn(tc, 'find')
-    cacheSpy = jest.spyOn(tc, 'cacheFile')
+    core.getInput.mockImplementation(name => String(inputs[name] || ''))
+    core.getBooleanInput.mockImplementation(name => Boolean(inputs[name]))
 
-    // @actions/exec
-    execSpy = jest.spyOn(exec, 'exec')
-
-    // writes
-    cnSpy = jest.spyOn(process.stdout, 'write')
-    logSpy = jest.spyOn(core, 'info')
-    dbgSpy = jest.spyOn(core, 'debug')
-    warningSpy = jest.spyOn(core, 'warning')
-    cnSpy.mockImplementation(line => {
+    core.info.mockImplementation(line => {
       // uncomment to debug
-      process.stderr.write('write:' + line + '\n')
+      process.stderr.write(`log:${line}\n`)
     })
-    logSpy.mockImplementation(line => {
-      // uncomment to debug
-      process.stderr.write('log:' + line + '\n')
-    })
-    dbgSpy.mockImplementation(msg => {
+    core.debug.mockImplementation(msg => {
       // uncomment to see debug output
-      process.stderr.write(msg + '\n')
+      process.stderr.write(`${msg}\n`)
     })
   })
 
@@ -86,7 +71,7 @@ describe('setup-edgedb', () => {
     inputs['cli-version'] = '>=3.2.0 <=3.4.0'
 
     let libc = ''
-    if (os.platform() == 'linux') {
+    if (os.platform() === 'linux') {
       libc = 'musl'
     }
     const baseDist = main.getBaseDist(os.arch(), os.platform(), libc)
@@ -99,27 +84,27 @@ describe('setup-edgedb', () => {
     fs.closeSync(fs.openSync(tmp, 'w'))
     tmp = fs.realpathSync(tmp)
 
-    dlSpy.mockImplementation(async () => tmp)
+    tc.downloadTool.mockImplementation(async () => tmp)
 
-    findSpy.mockImplementation(() => '')
+    tc.find.mockImplementation(() => '')
 
     const cliPath = path.normalize('/cache/edgedb/3.4.0')
-    cacheSpy.mockImplementation(async () => cliPath)
+    tc.cacheFile.mockImplementation(async () => cliPath)
 
     await main.run()
 
     fs.unlinkSync(tmp)
     fs.rmdirSync(tmpdir)
 
-    expect(dlSpy).toHaveBeenCalled()
-    expect(logSpy).toHaveBeenCalledWith(
+    expect(tc.downloadTool).toHaveBeenCalled()
+    expect(core.info).toHaveBeenCalledWith(
       expect.stringMatching(
         new RegExp(
-          `Downloading edgedb-cli ${expectedVer} - ${os.arch} from ${expectedUrl}`
+          `Downloading edgedb-cli ${expectedVer} - ${os.arch()} from ${expectedUrl}`
         )
       )
     )
-    expect(cnSpy).toHaveBeenCalledWith(`::add-path::${cliPath}${os.EOL}`)
+    expect(core.addPath).toHaveBeenCalledWith(cliPath)
   })
 
   it('Installs server', async () => {
@@ -127,7 +112,7 @@ describe('setup-edgedb', () => {
     inputs['server-version'] = 'stable'
 
     let libc = ''
-    if (os.platform() == 'linux') {
+    if (os.platform() === 'linux') {
       libc = 'musl'
     }
     const baseDist = main.getBaseDist(os.arch(), os.platform(), libc)
@@ -140,14 +125,15 @@ describe('setup-edgedb', () => {
     fs.closeSync(fs.openSync(tmp, 'w'))
     tmp = fs.realpathSync(tmp)
 
-    dlSpy.mockImplementation(async () => tmp)
+    tc.downloadTool.mockImplementation(async () => tmp)
 
-    findSpy.mockImplementation(() => '')
+    tc.find.mockImplementation(() => '')
 
-    execSpy.mockImplementation(async (cmd, args, opts: ExecOptions) => {
-      if (args[0] === 'server' && args[1] === 'install') {
+    exec.exec.mockImplementation(async (cmd, args, opts) => {
+      if (args && args[0] === 'server' && args[1] === 'install') {
         return 0
       } else if (
+        args &&
         args[0] === 'server' &&
         args[1] === 'info' &&
         args[2] === '--bin-path'
@@ -162,7 +148,7 @@ describe('setup-edgedb', () => {
     })
 
     const cliPath = path.normalize('/cache/edgedb/3.4.0')
-    cacheSpy.mockImplementation(async () => cliPath)
+    tc.cacheFile.mockImplementation(async () => cliPath)
     const serverPath = path.dirname(tmp)
 
     await main.run()
@@ -170,15 +156,15 @@ describe('setup-edgedb', () => {
     fs.unlinkSync(tmp)
     fs.rmdirSync(tmpdir)
 
-    expect(dlSpy).toHaveBeenCalled()
-    expect(logSpy).toHaveBeenCalledWith(
+    expect(tc.downloadTool).toHaveBeenCalled()
+    expect(core.info).toHaveBeenCalledWith(
       expect.stringMatching(
         new RegExp(
-          `Downloading edgedb-cli ${expectedVer} - ${os.arch} from ${expectedUrl}`
+          `Downloading edgedb-cli ${expectedVer} - ${os.arch()} from ${expectedUrl}`
         )
       )
     )
-    expect(cnSpy).toHaveBeenCalledWith(`::add-path::${serverPath}${os.EOL}`)
-    expect(cnSpy).toHaveBeenCalledWith(`::add-path::${cliPath}${os.EOL}`)
+    expect(core.addPath).toHaveBeenCalledWith(serverPath)
+    expect(core.addPath).toHaveBeenCalledWith(cliPath)
   })
 })

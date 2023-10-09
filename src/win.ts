@@ -54,7 +54,8 @@ async function installCLI(): Promise<void> {
     cliVersionRange,
     includeCliPrereleases
   )
-  const cliPkg = versionMap.get(matchingVer)
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const cliPkg = versionMap.get(matchingVer)!
   const downloadUrl = new URL(cliPkg.installref, main.EDGEDB_PKG_ROOT).href
 
   core.info(

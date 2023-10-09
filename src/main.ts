@@ -5,7 +5,7 @@ import * as io from '@actions/io'
 import * as cp from 'child_process'
 import * as tc from '@actions/tool-cache'
 import * as fs from 'fs'
-import * as fetch from 'node-fetch'
+import fetch from 'node-fetch'
 import * as os from 'os'
 import * as path from 'path'
 import * as semver from 'semver'
@@ -146,7 +146,8 @@ async function installCLI(requestedCliVersion: string): Promise<string> {
 
   let cliDirectory = tc.find('edgedb-cli', matchingVer, arch)
   if (!cliDirectory) {
-    const cliPkg = versionMap.get(matchingVer)
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const cliPkg = versionMap.get(matchingVer)!
     const downloadUrl = new URL(cliPkg.installref, EDGEDB_PKG_ROOT).href
     core.info(
       `Downloading edgedb-cli ${matchingVer} - ${arch} from ${downloadUrl}`
@@ -166,8 +167,7 @@ async function installCLI(requestedCliVersion: string): Promise<string> {
 }
 
 export async function getMatchingVer(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  versionMap: Map<string, any>,
+  versionMap: Map<string, unknown>,
   cliVersionRange: string,
   includeCliPrereleases: boolean
 ): Promise<string> {
@@ -187,10 +187,18 @@ export async function getMatchingVer(
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getVersionMap(dist: string): Promise<Map<string, any>> {
-  const indexRequest = await fetch.default(`${EDGEDB_PKG_IDX}/${dist}.json`)
-  const index = await indexRequest.json()
+interface Package {
+  name: string
+  version: string
+  revision: string
+  installref: string
+}
+
+export async function getVersionMap(
+  dist: string
+): Promise<Map<string, Package>> {
+  const indexRequest = await fetch(`${EDGEDB_PKG_IDX}/${dist}.json`)
+  const index = (await indexRequest.json()) as {packages: Package[]}
   const versionMap = new Map()
 
   for (const pkg of index.packages) {

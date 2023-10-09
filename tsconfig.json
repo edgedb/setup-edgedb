@@ -1,12 +1,12 @@
 {
   "compilerOptions": {
-    "target": "es6",
-    "module": "commonjs",
-    "outDir": "./lib",
-    "rootDir": "./src",
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
     "strict": true,
     "noImplicitAny": true,
     "esModuleInterop": true
   },
-  "exclude": ["node_modules", "**/*.test.ts"]
+  "include": ["src", "__tests__", "jest.config.ts"]
 }

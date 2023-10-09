@@ -1,8 +1,9 @@
 import * as main from '../src/main'
+import {expect, describe, it} from '@jest/globals'
 
 describe('setup-edgedb', () => {
   it('Sorts versions correctly', async () => {
-    let versionMap = new Map([
+    const versionMap = new Map([
       ['1.0.0-beta.2+d20210806.g803b254e6', 'foo'],
       ['1.0.0-beta.2+d20210808.g121de78de', 'baz'],
       ['1.0.0-beta.2+d20210807.gba2c70f52', 'bar'],

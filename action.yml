@@ -16,7 +16,7 @@ inputs:
     description: >
       Version of EdgeDB server to install, or "stable" for the latest
       stable release, or "nightly" for the latest nightly build,
-      or "none" to skip installaion. Defaults to "stable".
+      or "none" to skip installation. Defaults to "stable".
     default: 'stable'
   instance-name:
     required: false
@@ -38,5 +38,5 @@ inputs:
       If set, specifies the directory with edgedb.toml project manifest.
     default: ''
 runs:
-  using: 'node12'
-  main: 'dist/index.js'
+  using: 'node20'
+  main: 'dist/index.cjs'
