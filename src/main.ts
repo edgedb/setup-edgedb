@@ -226,6 +226,8 @@ export function getBaseDist(arch: string, platform: string, libc = ''): string {
 
   if (arch === 'x64') {
     distArch = 'x86_64'
+  } else if (arch === 'arm64') {
+    distArch = 'aarch64'
   } else {
     throw Error(`This action does not support the ${arch} architecture`)
   }
