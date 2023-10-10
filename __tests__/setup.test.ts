@@ -83,7 +83,7 @@ describe('setup-edgedb', () => {
   })
 
   it('Installs CLI', async () => {
-    inputs['cli-version'] = '>=1.0.0-rc.1 <=1.0.0-rc.2'
+    inputs['cli-version'] = '>=3.2.0 <=3.4.0'
 
     let libc = ''
     if (os.platform() == 'linux') {
@@ -91,7 +91,7 @@ describe('setup-edgedb', () => {
     }
     const baseDist = main.getBaseDist(os.arch(), os.platform(), libc)
     const pkgBase = `https://packages.edgedb.com/archive/${baseDist}`
-    const expectedVer = '1.0.0-rc.2\\+([0-9a-f]{7})'
+    const expectedVer = '3.4.0\\+([0-9a-f]{7})'
     const expectedUrl = `${pkgBase}/edgedb-cli-${expectedVer}`
 
     const tmpdir = fs.mkdtempSync('edgedb-setup')
@@ -103,7 +103,7 @@ describe('setup-edgedb', () => {
 
     findSpy.mockImplementation(() => '')
 
-    const cliPath = path.normalize('/cache/edgedb/1.0.0-rc.2')
+    const cliPath = path.normalize('/cache/edgedb/3.4.0')
     cacheSpy.mockImplementation(async () => cliPath)
 
     await main.run()
@@ -123,7 +123,7 @@ describe('setup-edgedb', () => {
   })
 
   it('Installs server', async () => {
-    inputs['cli-version'] = '>=1.0.0-rc.1 <=1.0.0-rc.2'
+    inputs['cli-version'] = '>=3.2.0 <=3.4.0'
     inputs['server-version'] = 'stable'
 
     let libc = ''
@@ -132,7 +132,7 @@ describe('setup-edgedb', () => {
     }
     const baseDist = main.getBaseDist(os.arch(), os.platform(), libc)
     const pkgBase = `https://packages.edgedb.com/archive/${baseDist}`
-    const expectedVer = '1.0.0-rc.2\\+([0-9a-f]{7})'
+    const expectedVer = '3.4.0\\+([0-9a-f]{7})'
     const expectedUrl = `${pkgBase}/edgedb-cli-${expectedVer}`
 
     const tmpdir = fs.mkdtempSync('edgedb-setup')
@@ -161,7 +161,7 @@ describe('setup-edgedb', () => {
       }
     })
 
-    const cliPath = path.normalize('/cache/edgedb/1.0.0-rc.2')
+    const cliPath = path.normalize('/cache/edgedb/3.4.0')
     cacheSpy.mockImplementation(async () => cliPath)
     const serverPath = path.dirname(tmp)
 

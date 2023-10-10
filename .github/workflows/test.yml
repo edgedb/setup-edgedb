@@ -25,7 +25,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         cli-version: [stable, nightly]
-        server-version: [stable, nightly, 1.0-rc.2]
+        server-version: [stable, nightly, 3.0-rc.1]
       fail-fast: false
     steps:
       - uses: actions/checkout@v2
@@ -44,13 +44,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         cli-version: [stable, nightly]
-        server-version: [stable, nightly, 1.0-rc.2]
+        server-version: [stable, nightly, 3.0-rc.1]
       fail-fast: false
     steps:
       - uses: actions/checkout@v2
       - name: Create edgedb.toml
         run: |
-          echo -e '[edgedb]\nserver-version = "1.0-rc.2"' >> edgedb.toml
+          echo -e '[edgedb]\nserver-version = "3.0-rc.1"' >> edgedb.toml
       - uses: ./
         with:
           cli-version: ${{ matrix.cli-version }}
@@ -67,7 +67,7 @@ jobs:
       fail-fast: false
     services:
       edgedb:
-        image: edgedb/edgedb:1-rc2
+        image: edgedb/edgedb:3
         env:
           EDGEDB_SERVER_SECURITY: insecure_dev_mode
         ports:
@@ -76,7 +76,7 @@ jobs:
       - uses: actions/checkout@v2
       - name: Create edgedb.toml
         run: |
-          echo -e '[edgedb]\nserver-version = "1.0-rc.2"' >> edgedb.toml
+          echo -e '[edgedb]\nserver-version = "3.0-rc.1"' >> edgedb.toml
       - uses: ./
         with:
           server-dsn: edgedb://localhost:5656
