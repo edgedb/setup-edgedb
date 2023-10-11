@@ -11,11 +11,11 @@ import {
   jest
 } from '@jest/globals'
 import * as fs from 'fs'
-import * as os from 'os'
 import * as path from 'path'
 import * as process from 'process'
 import url from 'url'
 import type * as mainType from '../src/main'
+import type * as packagesType from '../src/packages'
 import {SpiedModule, spyOnModule} from './spy-on-module'
 
 const tempDir = path.join(
@@ -31,12 +31,14 @@ describe('setup-edgedb', () => {
   let core: SpiedModule<typeof coreType>
   let exec: SpiedModule<typeof execType>
   let tc: SpiedModule<typeof tcType>
+  let packages: SpiedModule<typeof packagesType>
   let main: typeof mainType
 
   beforeAll(async () => {
     core = await spyOnModule<typeof coreType>('@actions/core')
     tc = await spyOnModule<typeof tcType>('@actions/tool-cache')
     exec = await spyOnModule<typeof execType>('@actions/exec')
+    packages = await spyOnModule<typeof packagesType>('../src/packages')
     // After mocks have been set up
     main = await import('../src/main')
   })
@@ -68,16 +70,18 @@ describe('setup-edgedb', () => {
   })
 
   it('Installs CLI', async () => {
-    inputs['cli-version'] = '>=3.2.0 <=3.4.0'
+    const cliVersionRange = '>=3.2.0 <=3.4.0'
+    inputs['cli-version'] = cliVersionRange
 
-    let libc = ''
-    if (os.platform() === 'linux') {
-      libc = 'musl'
+    const fakePackage: packagesType.Package = {
+      name: 'edgedb-cli',
+      version: '3.4.0+160d07d',
+      revision: '202309122051',
+      architecture: 'x86_64',
+      installref: '/cli-3.4',
+      downloadUrl: 'https://edgedb.com/cli-3.4'
     }
-    const baseDist = main.getBaseDist(os.arch(), os.platform(), libc)
-    const pkgBase = `https://packages.edgedb.com/archive/${baseDist}`
-    const expectedVer = '3.4.0\\+([0-9a-f]{7})'
-    const expectedUrl = `${pkgBase}/edgedb-cli-${expectedVer}`
+    packages.getCliPackage.mockResolvedValue(fakePackage)
 
     const tmpdir = fs.mkdtempSync('edgedb-setup')
     let tmp = path.join(tmpdir, 'foo')
@@ -96,38 +100,26 @@ describe('setup-edgedb', () => {
     fs.unlinkSync(tmp)
     fs.rmdirSync(tmpdir)
 
+    expect(packages.getCliPackage).toHaveBeenCalledWith(cliVersionRange)
     expect(tc.downloadTool).toHaveBeenCalled()
     expect(core.info).toHaveBeenCalledWith(
-      expect.stringMatching(
-        new RegExp(
-          `Downloading edgedb-cli ${expectedVer} - ${os.arch()} from ${expectedUrl}`
-        )
-      )
+      `Downloading edgedb-cli ${fakePackage.version} - x86_64 from ${fakePackage.downloadUrl}`
     )
     expect(core.addPath).toHaveBeenCalledWith(cliPath)
   })
 
   it('Installs server', async () => {
-    inputs['cli-version'] = '>=3.2.0 <=3.4.0'
     inputs['server-version'] = 'stable'
 
-    let libc = ''
-    if (os.platform() === 'linux') {
-      libc = 'musl'
-    }
-    const baseDist = main.getBaseDist(os.arch(), os.platform(), libc)
-    const pkgBase = `https://packages.edgedb.com/archive/${baseDist}`
-    const expectedVer = '3.4.0\\+([0-9a-f]{7})'
-    const expectedUrl = `${pkgBase}/edgedb-cli-${expectedVer}`
+    packages.getCliPackage.mockResolvedValue({} as packagesType.Package)
+
+    const cliPath = path.normalize('/cache/edgedb/3.4.0')
+    tc.find.mockReturnValue(cliPath)
 
     const tmpdir = fs.mkdtempSync('edgedb-setup')
     let tmp = path.join(tmpdir, 'foo')
     fs.closeSync(fs.openSync(tmp, 'w'))
     tmp = fs.realpathSync(tmp)
-
-    tc.downloadTool.mockImplementation(async () => tmp)
-
-    tc.find.mockImplementation(() => '')
 
     exec.exec.mockImplementation(async (cmd, args, opts) => {
       if (args && args[0] === 'server' && args[1] === 'install') {
@@ -147,8 +139,6 @@ describe('setup-edgedb', () => {
       }
     })
 
-    const cliPath = path.normalize('/cache/edgedb/3.4.0')
-    tc.cacheFile.mockImplementation(async () => cliPath)
     const serverPath = path.dirname(tmp)
 
     await main.run()
@@ -156,14 +146,6 @@ describe('setup-edgedb', () => {
     fs.unlinkSync(tmp)
     fs.rmdirSync(tmpdir)
 
-    expect(tc.downloadTool).toHaveBeenCalled()
-    expect(core.info).toHaveBeenCalledWith(
-      expect.stringMatching(
-        new RegExp(
-          `Downloading edgedb-cli ${expectedVer} - ${os.arch()} from ${expectedUrl}`
-        )
-      )
-    )
     expect(core.addPath).toHaveBeenCalledWith(serverPath)
     expect(core.addPath).toHaveBeenCalledWith(cliPath)
   })

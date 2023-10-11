@@ -1,8 +1,7 @@
-import * as main from './main'
 import * as core from '@actions/core'
 import * as exec from '@actions/exec'
-import * as os from 'os'
 import * as path from 'path'
+import {getCliPackage} from './packages'
 
 export async function run(): Promise<void> {
   try {
@@ -28,38 +27,11 @@ async function checkOutput(cmd: string, args?: string[]): Promise<string> {
   return out.trim()
 }
 
-async function getBaseDist(): Promise<string> {
-  const arch = os.arch()
-  const platform = (await checkOutput('wsl uname')).toLocaleLowerCase()
-
-  return main.getBaseDist(arch, platform, 'musl')
-}
-
 async function installCLI(): Promise<void> {
   const requestedCLIVersion = core.getInput('cli-version')
-  const arch = os.arch()
-  const includeCliPrereleases = true
-  let cliVersionRange = '*'
-  let dist = await getBaseDist()
-
-  if (requestedCLIVersion === 'nightly') {
-    dist += '.nightly'
-  } else if (requestedCLIVersion !== 'stable') {
-    cliVersionRange = requestedCLIVersion
-  }
-
-  const versionMap = await main.getVersionMap(dist)
-  const matchingVer = await main.getMatchingVer(
-    versionMap,
-    cliVersionRange,
-    includeCliPrereleases
-  )
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const cliPkg = versionMap.get(matchingVer)!
-  const downloadUrl = new URL(cliPkg.installref, main.EDGEDB_PKG_ROOT).href
-
+  const pkg = await getCliPackage(requestedCLIVersion)
   core.info(
-    `Downloading edgedb-cli ${matchingVer} - ${arch} from ${downloadUrl}`
+    `Downloading edgedb-cli ${pkg.version} - ${pkg.architecture} from ${pkg.downloadUrl}`
   )
 
   await checkOutput('wsl', [
@@ -67,7 +39,7 @@ async function installCLI(): Promise<void> {
     '--fail',
     '--output',
     '/usr/bin/edgedb',
-    downloadUrl
+    pkg.downloadUrl
   ])
   await checkOutput('wsl chmod +x /usr/bin/edgedb')
 }
