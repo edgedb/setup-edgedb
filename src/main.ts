@@ -320,8 +320,6 @@ async function initProject(
 
   const cmdOptionsLine = [
     '--non-interactive',
-    '--server-start-conf',
-    'manual',
     '--server-instance',
     instanceName
   ]
@@ -361,7 +359,7 @@ async function createNamedInstance(
     }
   }
 
-  const cmdOptionsLine = ['--start-conf', 'manual']
+  const cmdOptionsLine = []
   if (serverVersion === 'nightly') {
     cmdOptionsLine.push('--nightly')
   } else if (serverVersion && serverVersion !== 'stable') {
