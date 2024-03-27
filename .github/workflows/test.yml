@@ -13,7 +13,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - run: |
           npm install
       - run: |
@@ -28,7 +28,7 @@ jobs:
         server-version: [stable, nightly, 3.0-rc.1]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: ./
         with:
           cli-version: ${{ matrix.cli-version }}
@@ -47,7 +47,7 @@ jobs:
         server-version: [stable, nightly, 3.0-rc.1]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Create edgedb.toml
         run: |
           echo -e '[edgedb]\nserver-version = "3.0-rc.1"' >> edgedb.toml
@@ -73,7 +73,7 @@ jobs:
         ports:
           - 5656:5656
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Create edgedb.toml
         run: |
           echo -e '[edgedb]\nserver-version = "3.0-rc.1"' >> edgedb.toml
@@ -93,7 +93,7 @@ jobs:
           additional-packages:
             ca-certificates
             curl
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: ./
       - name: Verify installation
         shell: wsl-bash {0}
