@@ -5,13 +5,9 @@ import * as io from '@actions/io'
 import * as cp from 'child_process'
 import * as tc from '@actions/tool-cache'
 import * as fs from 'fs'
-import fetch from 'node-fetch'
 import * as os from 'os'
 import * as path from 'path'
-import * as semver from 'semver'
-
-export const EDGEDB_PKG_ROOT = 'https://packages.edgedb.com'
-const EDGEDB_PKG_IDX = `${EDGEDB_PKG_ROOT}/archive/.jsonindexes`
+import {getCliPackage} from './packages'
 
 export async function run(): Promise<void> {
   const cliVersion = core.getInput('cli-version')
@@ -121,126 +117,19 @@ async function installServer(
 }
 
 async function installCLI(requestedCliVersion: string): Promise<string> {
-  const arch = os.arch()
-  const platform = os.platform()
-  const includeCliPrereleases = true
-  let cliVersionRange = '*'
-  let libc = ''
-  if (platform === 'linux') {
-    libc = 'musl'
-  }
-  let dist = getBaseDist(arch, platform, libc)
+  const pkg = await getCliPackage(requestedCliVersion)
 
-  if (requestedCliVersion === 'nightly') {
-    dist += '.nightly'
-  } else if (requestedCliVersion !== 'stable') {
-    cliVersionRange = requestedCliVersion
+  const cached = tc.find('edgedb-cli', pkg.version)
+  if (cached) {
+    return cached
   }
 
-  const versionMap = await getVersionMap(dist)
-  const matchingVer = await getMatchingVer(
-    versionMap,
-    cliVersionRange,
-    includeCliPrereleases
+  core.info(
+    `Downloading edgedb-cli ${pkg.version} - ${pkg.architecture} from ${pkg.downloadUrl}`
   )
-
-  let cliDirectory = tc.find('edgedb-cli', matchingVer, arch)
-  if (!cliDirectory) {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const cliPkg = versionMap.get(matchingVer)!
-    const downloadUrl = new URL(cliPkg.installref, EDGEDB_PKG_ROOT).href
-    core.info(
-      `Downloading edgedb-cli ${matchingVer} - ${arch} from ${downloadUrl}`
-    )
-    const downloadPath = await tc.downloadTool(downloadUrl)
-    fs.chmodSync(downloadPath, 0o755)
-    cliDirectory = await tc.cacheFile(
-      downloadPath,
-      'edgedb',
-      'edgedb-cli',
-      matchingVer,
-      arch
-    )
-  }
-
-  return cliDirectory
-}
-
-export async function getMatchingVer(
-  versionMap: Map<string, unknown>,
-  cliVersionRange: string,
-  includeCliPrereleases: boolean
-): Promise<string> {
-  const versions = Array.from(versionMap.keys()).filter(ver =>
-    semver.satisfies(ver, cliVersionRange, {
-      includePrerelease: includeCliPrereleases
-    })
-  )
-  versions.sort(semver.compareBuild)
-  if (versions.length > 0) {
-    return versions[versions.length - 1]
-  } else {
-    throw Error(
-      'no published EdgeDB CLI version matches requested version ' +
-        `'${cliVersionRange}'`
-    )
-  }
-}
-
-interface Package {
-  name: string
-  version: string
-  revision: string
-  installref: string
-}
-
-export async function getVersionMap(
-  dist: string
-): Promise<Map<string, Package>> {
-  const indexRequest = await fetch(`${EDGEDB_PKG_IDX}/${dist}.json`)
-  const index = (await indexRequest.json()) as {packages: Package[]}
-  const versionMap = new Map()
-
-  for (const pkg of index.packages) {
-    if (pkg.name !== 'edgedb-cli') {
-      continue
-    }
-
-    if (
-      !versionMap.has(pkg.version) ||
-      versionMap.get(pkg.version).revision < pkg.revision
-    ) {
-      versionMap.set(pkg.version, pkg)
-    }
-  }
-
-  return versionMap
-}
-
-export function getBaseDist(arch: string, platform: string, libc = ''): string {
-  let distArch = ''
-  let distPlatform = ''
-
-  if (platform === 'linux') {
-    if (libc === '') {
-      libc = 'gnu'
-    }
-    distPlatform = `unknown-linux-${libc}`
-  } else if (platform === 'darwin') {
-    distPlatform = 'apple-darwin'
-  } else {
-    throw Error(`This action cannot be run on ${platform}`)
-  }
-
-  if (arch === 'x64') {
-    distArch = 'x86_64'
-  } else if (arch === 'arm64') {
-    distArch = 'aarch64'
-  } else {
-    throw Error(`This action does not support the ${arch} architecture`)
-  }
-
-  return `${distArch}-${distPlatform}`
+  const downloadPath = await tc.downloadTool(pkg.downloadUrl)
+  fs.chmodSync(downloadPath, 0o755)
+  return await tc.cacheFile(downloadPath, 'edgedb', 'edgedb-cli', pkg.version)
 }
 
 async function linkInstance(
